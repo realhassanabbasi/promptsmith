@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "promptsmith"
+version = "1.0.0"
+description = "Turn rough prompts into engineered ones — offline, zero dependencies"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Hassan Abbasi" }]
+keywords = ["prompt-engineering", "llm", "ai", "cli", "nlp"]
+
+[project.scripts]
+promptsmith = "promptsmith.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["promptsmith*"]

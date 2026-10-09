@@ -1,5 +1,10 @@
 """Run: python -m unittest discover -s tests -v"""
 
+import contextlib
+import io
+import json
+import os
+import tempfile
 import unittest
 
 from promptsmith.classifier import load_default
@@ -90,6 +95,71 @@ class TestTemplates(unittest.TestCase):
 
     def test_placeholders_found(self):
         self.assertIn("concept", placeholders("explain-concept"))
+
+
+class TestCLI(unittest.TestCase):
+    def _run(self, argv):
+        from promptsmith.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(argv)
+        return buf.getvalue()
+
+    def test_score_json_parses(self):
+        out = self._run(["score", "help me with python", "--json"])
+        data = json.loads(out)
+        self.assertEqual(set(data),
+                         {"prompt", "score", "grade", "breakdown", "feedback"})
+        self.assertLess(data["score"], 50)
+        self.assertEqual(data["breakdown"]["clarity"] +
+                         data["breakdown"]["context"] +
+                         data["breakdown"]["specificity"] +
+                         data["breakdown"]["format"] +
+                         data["breakdown"]["guardrails"], data["score"])
+
+    def test_enhance_json_parses(self):
+        out = self._run(["enhance", "help me with python", "--json"])
+        data = json.loads(out)
+        self.assertEqual(set(data), {"prompt", "intent", "confidence",
+                                     "before", "after", "gain", "enhanced"})
+        self.assertGreater(data["after"], data["before"])
+        self.assertEqual(data["gain"], data["after"] - data["before"])
+
+    def test_batch_scores_file(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".txt",
+                                         delete=False) as f:
+            f.write("help me with python\n\n"
+                    "Write a cover letter for a data science internship. "
+                    "Keep it under 250 words. Tone: confident.\n")
+            path = f.name
+        try:
+            out = self._run(["batch", path, "--json"])
+            data = json.loads(out)
+            self.assertEqual(len(data["prompts"]), 2)  # blank line skipped
+            self.assertEqual(data["summary"]["count"], 2)
+            self.assertLess(data["prompts"][0]["score"],
+                            data["prompts"][1]["score"])
+        finally:
+            os.unlink(path)
+
+    def test_batch_enhance_writes_file(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".txt",
+                                         delete=False) as f:
+            f.write("help me with python\nteach me photography terms\n")
+            path = f.name
+        try:
+            self._run(["batch", path, "--enhance"])
+            out_path = path + ".enhanced.md"
+            self.assertTrue(os.path.exists(out_path))
+            with open(out_path) as f:
+                content = f.read()
+            self.assertIn("## 1.", content)
+            self.assertIn("## 2.", content)
+            self.assertIn("Guardrails", content)
+        finally:
+            os.unlink(path)
+            if os.path.exists(path + ".enhanced.md"):
+                os.unlink(path + ".enhanced.md")
 
 
 if __name__ == "__main__":

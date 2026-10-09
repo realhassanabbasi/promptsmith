@@ -59,7 +59,10 @@ Run the test suite:
 python -m unittest discover -s tests -v
 ```
 
-Python 3.9+ and you're good. CI runs the suite on 3.10, 3.11 and 3.12.
+Python 3.9+ and you're good. A CI workflow for 3.10 / 3.11 / 3.12 ships with the
+repo the moment it's added under `.github/workflows/` (see `.github/workflows/ci.yml`
+in the source tree — GitHub Apps can't push workflow files, so this one goes in
+by hand).
 
 ## Batch mode
 
@@ -182,6 +185,7 @@ promptsmith/
 ├── .github/
 │   └── workflows/
 │       └── ci.yml           # tests on Python 3.10 / 3.11 / 3.12
+│                            # (add by hand — GitHub Apps can't push workflow files)
 ├── promptsmith/
 │   ├── __init__.py        # public API
 │   ├── __main__.py        # `python -m promptsmith`

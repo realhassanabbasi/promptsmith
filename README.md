@@ -87,6 +87,8 @@ or `batch` prints machine-readable JSON for scripts and pipelines.
 
 ## Demo
 
+![PromptSmith terminal demo](assets/demo.svg)
+
 Real output, copied from the terminal — no mockups:
 
 ```

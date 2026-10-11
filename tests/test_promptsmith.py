@@ -162,5 +162,35 @@ class TestCLI(unittest.TestCase):
                 os.unlink(path + ".enhanced.md")
 
 
+class TestPackaging(unittest.TestCase):
+    """Regression test: the intent training data must ship inside the
+    installed package, or `promptsmith enhance` crashes with
+    FileNotFoundError for anyone installing via pip (found 2026-10-11)."""
+
+    def test_pyproject_declares_package_data(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        pyproject = os.path.join(root, "pyproject.toml")
+        with open(pyproject, encoding="utf-8") as f:
+            content = f.read()
+        self.assertIn("[tool.setuptools.package-data]", content)
+        self.assertIn("data/*.json", content)
+
+    def test_training_data_sits_inside_package(self):
+        import promptsmith
+        data_path = os.path.join(os.path.dirname(promptsmith.__file__),
+                                 "data", "training_prompts.json")
+        self.assertTrue(os.path.isfile(data_path),
+                        f"missing from package: {data_path}")
+        with open(data_path, encoding="utf-8") as f:
+            data = json.load(f)
+        self.assertIn("intents", data)
+        self.assertGreater(len(data["intents"]), 0)
+
+    def test_end_to_end_enhance(self):
+        # the exact path that crashed on pip installs before the fix
+        result = enhance("write a story about a dog")
+        self.assertGreater(result["after"], result["before"])
+
+
 if __name__ == "__main__":
     unittest.main()

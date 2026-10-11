@@ -40,6 +40,35 @@ class TestClassifier(unittest.TestCase):
         self.assertGreaterEqual(conf, 0)
         self.assertLessEqual(conf, 1)
 
+    def test_chat_intent(self):
+        intent, conf = self.clf.predict("translate good morning to urdu")
+        self.assertEqual(intent, "chat")
+        self.assertGreaterEqual(conf, 0.5)
+
+    def test_learn_disambiguation(self):
+        # "how do i learn X" used to misfire as debug; it must read as learn
+        intent, _ = self.clf.predict("how do i learn french verbs fast")
+        self.assertEqual(intent, "learn")
+
+    def test_low_confidence_falls_back_to_chat(self):
+        from promptsmith.classifier import predict_intent
+        intent, conf = predict_intent("zxqw asdf jklm qwerty")
+        self.assertLess(conf, 0.35)
+        self.assertEqual(intent, "chat")
+
+    def test_holdout_accuracy(self):
+        # last example per intent held out, retrain, most must still classify
+        from promptsmith.classifier import NaiveBayesIntent
+        import json as _json, os as _os
+        path = _os.path.join(_os.path.dirname(load_default.__code__.co_filename),
+                             "data", "training_prompts.json")
+        with open(path, encoding="utf-8") as _f:
+            data = _json.load(_f)["intents"]
+        clf = NaiveBayesIntent()
+        clf.train({k: v[:-1] for k, v in data.items()})
+        ok = sum(1 for k, v in data.items() if clf.predict(v[-1])[0] == k)
+        self.assertGreaterEqual(ok / len(data), 0.7)
+
 
 class TestScorer(unittest.TestCase):
     def test_weak_prompt_scores_low(self):
@@ -76,6 +105,11 @@ class TestEnhancer(unittest.TestCase):
     def test_enhance_detects_intent(self):
         r = enhance("teach me photography terms")
         self.assertEqual(r["intent"], "learn")
+
+    def test_enhance_falls_back_on_shaky_intent(self):
+        r = enhance("zxqw asdf jklm qwerty")
+        self.assertEqual(r["intent"], "chat")
+        self.assertLess(r["confidence"], 0.35)
 
 
 class TestTemplates(unittest.TestCase):

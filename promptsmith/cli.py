@@ -5,7 +5,7 @@ import json
 import sys
 
 from . import __version__, enhance
-from .classifier import load_default
+from .classifier import predict_intent
 from .scorer import grade, score_prompt
 from .templates import TEMPLATES, names, placeholders, render
 
@@ -153,8 +153,7 @@ def cmd_interactive(_args):
     if not goal:
         print("Nothing to enhance — bye!")
         return
-    clf = load_default()
-    intent, conf = clf.predict(goal)
+    intent, conf = predict_intent(goal)
     print(f"\nSounds like a {cyan(intent)} task (confidence {conf}).")
     ctx = input("Any background or context? (press Enter to skip) ").strip()
     fmt = input("How should the answer look? (bullets/table/code/steps, Enter=auto) ").strip()

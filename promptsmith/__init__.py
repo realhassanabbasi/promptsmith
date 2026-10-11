@@ -3,10 +3,10 @@
 Zero dependencies, works offline. Built by Hassan Abbasi.
 """
 
-from .classifier import load_default
+from .classifier import load_default, predict_intent
 from .enhancer import enhance
 from .scorer import grade, score_prompt
 from .templates import names, placeholders, render, TEMPLATES
 
-__version__ = "1.1.1"
-__all__ = ["load_default", "enhance", "score_prompt", "grade", "render", "names", "placeholders", "TEMPLATES"]
+__version__ = "1.2.0"
+__all__ = ["load_default", "predict_intent", "enhance", "score_prompt", "grade", "render", "names", "placeholders", "TEMPLATES"]

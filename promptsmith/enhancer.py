@@ -5,6 +5,7 @@ Pipeline: detect intent -> score the draft -> fill the gaps
 """
 
 from . import scorer
+from .classifier import predict_intent
 
 ROLES = {
     "code": "You are a senior software engineer who writes clean, well-commented code.",
@@ -42,12 +43,11 @@ REQUIREMENTS = {
 
 def enhance(raw, intent=None, confidence=None):
     """Returns dict with the enhanced prompt, intent, scores before/after."""
-    from .classifier import load_default
-
     raw = raw.strip()
     if intent is None:
-        clf = load_default()
-        intent, confidence = clf.predict(raw)
+        # predict_intent falls back to "chat" when confidence is shaky,
+        # so a wrong guess never picks the role/format for the user
+        intent, confidence = predict_intent(raw)
 
     before, _, _ = scorer.score_prompt(raw)
     role = ROLES.get(intent, ROLES["chat"])

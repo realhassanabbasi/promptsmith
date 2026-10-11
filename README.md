@@ -18,7 +18,7 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 - **`batch`** — score every prompt in a file (one per line): averages, weakest prompt, optional `--enhance` that writes `FILE.enhanced.md`
 - **`templates`** — 8 fill-in-the-blank templates (debug code, explain concepts, learn vocabulary, study plans…)
 - **`interactive`** — guided Q&A that builds your prompt with you
-- **From-scratch ML** — intent classifier (Multinomial Naive Bayes) trained on a built-in labeled set, pure stdlib
+- **From-scratch ML** — intent classifier (Multinomial Naive Bayes) trained on 94 labeled prompts across 8 intents, pure stdlib; shaky guesses fall back to a generic role instead of a confident wrong one
 - **Zero dependencies** — only the Python standard library; runs anywhere, even offline
 
 ## Quickstart
@@ -112,7 +112,7 @@ How to improve:
 ```
 $ promptsmith enhance "help me with python"
 
-Detected intent: code (confidence 0.34)
+Detected intent: code (confidence 0.38)
 Score: 37 → 92  (+55)
 
 — Enhanced prompt (copy everything below) —
@@ -159,13 +159,14 @@ More pairs in [`examples/before_after.md`](examples/before_after.md).
      +------+------+      +------+------+      | format,     |
             |                    |             | guardrails  |
    training_prompts.json         |             +------+------+
-   (70 labeled prompts,          +----> before/after scores -+
-    7 intents x 10)                             (self-check)
+   (94 labeled prompts,          +----> before/after scores -+
+    8 intents)                                  (self-check)
 ```
 
 Design decisions, stated plainly:
 
-- **From-scratch Naive Bayes instead of sklearn** — the math is ~60 lines and fully auditable, and it keeps the tool at zero dependencies. For 7 intents and 70 examples, a hand-rolled classifier is the right-sized tool, not a shortcut.
+- **From-scratch Naive Bayes instead of sklearn** — the math is ~60 lines and fully auditable, and it keeps the tool at zero dependencies. For 8 intents and 94 examples, a hand-rolled classifier is the right-sized tool, not a shortcut.
+- **Low-confidence fallback instead of confident wrong guesses** — when intent confidence drops below 0.35, the enhancer uses the generic `chat` role rather than the top guess. A wrong role and format actively harms the output; an honest generic one doesn't.
 - **Zero dependencies as a hard constraint** — the audience is students on free tiers. `pip install` should never pull a dependency tree, and the tool must run offline.
 - **Rule-based scorer, not an LLM judge** — deterministic, instant, explainable. The point is teaching prompt craft, so the feedback must be inspectable. The honest cost of this choice is in Limitations below.
 - **Enhancement by gap-filling, not rewriting** — the enhancer wraps *your* task text with a role, requirements, format and guardrails instead of replacing your intent. Your words stay yours.
@@ -175,7 +176,7 @@ Design decisions, stated plainly:
 Honest ones, verified against the code:
 
 - **English only.** The tokenizer keeps `[a-z]+` and every scoring keyword list is English. Non-English prompts will score badly and misclassify — that's the tool's boundary, not yours.
-- **Tiny training set.** 70 labeled prompts (10 per intent, 7 intents). Confidence numbers like `0.34` are honest but shaky; unusual prompts will be misclassified. (The enhancer's 8th `chat` role is a fallback default — the classifier only ever predicts the 7 trained intents.)
+- **Tiny training set.** 94 labeled prompts across 8 intents (10–16 per intent). Holdout accuracy (last example per intent, retrained) is 6/8 — both misses were low-confidence guesses, exactly the case the 0.35 fallback now catches by using the generic `chat` role. Unusual prompts will still misclassify; that's the tool's boundary, not yours.
 - **Scores are heuristic, not measured.** The rubric is a hand-written checklist. The "37 → 92" gain is computed by the *same* scorer that shaped the enhancement — self-reported progress, not an independent measurement of answer quality.
 - **No model calls, ever.** PromptSmith never talks to an LLM, so it can't verify that an enhanced prompt actually gets better answers. That final check is yours.
 - **Terminal needed for two modes.** `interactive` and `templates --show` read from `input()` — they need a real terminal, not a pipe.
@@ -191,15 +192,15 @@ promptsmith/
 ├── promptsmith/
 │   ├── __init__.py        # public API
 │   ├── __main__.py        # `python -m promptsmith`
-│   ├── cli.py             # argparse CLI (score/enhance/templates/interactive)
-│   ├── classifier.py      # Naive Bayes intent classifier, from scratch
+│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive)
+│   ├── classifier.py      # Naive Bayes intent classifier, from scratch (+0.35 fallback)
 │   ├── enhancer.py        # enhancement pipeline (role → structure → guardrails)
 │   ├── scorer.py          # 5-check rubric, 0-100
 │   ├── templates.py       # 8 ready-made templates
 │   └── data/
-│       └── training_prompts.json  # labeled set (70 prompts, 7 intents)
+│       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 19 unit tests (scorer, classifier, enhancer, CLI, batch)
+│   └── test_promptsmith.py  # 27 unit tests (scorer, classifier, enhancer, CLI, batch, packaging)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

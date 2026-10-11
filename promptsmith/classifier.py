@@ -73,3 +73,26 @@ def load_default():
     clf = NaiveBayesIntent()
     clf.train(data["intents"])
     return clf
+
+
+# Below this confidence the winning intent is a guess, not a read.
+# Falling back to "chat" (the generic role) beats confidently
+# enhancing with the wrong intent's role and format.
+FALLBACK_CONFIDENCE = 0.35
+
+_default_clf = None
+
+
+def predict_intent(text):
+    """(intent, confidence) with an honest fallback.
+
+    Uses the trained classifier, but when confidence is shaky the
+    intent falls back to "chat" instead of a wrong specific guess.
+    """
+    global _default_clf
+    if _default_clf is None:
+        _default_clf = load_default()
+    intent, conf = _default_clf.predict(text)
+    if conf < FALLBACK_CONFIDENCE:
+        return "chat", conf
+    return intent, conf

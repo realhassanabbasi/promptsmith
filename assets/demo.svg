@@ -18,7 +18,7 @@
 <text x="24" y="269" font-size="14" fill="#e5e7eb"></text>
 <text x="24" y="290" font-size="14" fill="#7dd3fc">$ promptsmith enhance &quot;write a story about a dog&quot;</text>
 <text x="24" y="311" font-size="14" fill="#e5e7eb"></text>
-<text x="24" y="332" font-size="14" fill="#e5e7eb">Detected intent: write (confidence 0.81)</text>
+<text x="24" y="332" font-size="14" fill="#e5e7eb">Detected intent: write (confidence 0.73)</text>
 <text x="24" y="353" font-size="14" fill="#e5e7eb">Score: 37 → 92  (+55)</text>
 <text x="24" y="374" font-size="14" fill="#e5e7eb">— Enhanced prompt (copy everything below) —</text>
 <text x="24" y="395" font-size="14" fill="#e5e7eb">You are a professional writer with a clear, natural voice.</text>

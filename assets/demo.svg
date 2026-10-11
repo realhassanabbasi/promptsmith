@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="780" height="553" viewBox="0 0 780 553">
+<style>text{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}</style>
+<rect width="780" height="553" rx="12" fill="#0d1117"/>
+<circle cx="24" cy="18" r="6" fill="#ff5f57"/>
+<circle cx="44" cy="18" r="6" fill="#febc2e"/>
+<circle cx="64" cy="18" r="6" fill="#28c840"/>
+<text x="88" y="23" font-size="13" fill="#6b7280">promptsmith — live demo</text>
+<text x="24" y="59" font-size="14" fill="#7dd3fc">$ promptsmith score &quot;write a story about a dog&quot;</text>
+<text x="24" y="80" font-size="14" fill="#e5e7eb"></text>
+<text x="24" y="101" font-size="14" fill="#9ca3af">Prompt score: 37/100 (weak)</text>
+<text x="24" y="122" font-size="14" fill="#9ca3af">  clarity      ██████████  20/20</text>
+<text x="24" y="143" font-size="14" fill="#9ca3af">  context      █░░░░░░░░░   3/20</text>
+<text x="24" y="164" font-size="14" fill="#9ca3af">  specificity  ██░░░░░░░░   5/20</text>
+<text x="24" y="185" font-size="14" fill="#9ca3af">  format       ██░░░░░░░░   4/20</text>
+<text x="24" y="206" font-size="14" fill="#9ca3af">  guardrails   ██░░░░░░░░   5/20</text>
+<text x="24" y="227" font-size="14" fill="#9ca3af">How to improve:</text>
+<text x="24" y="248" font-size="14" fill="#e5e7eb"></text>
+<text x="24" y="269" font-size="14" fill="#e5e7eb"></text>
+<text x="24" y="290" font-size="14" fill="#7dd3fc">$ promptsmith enhance &quot;write a story about a dog&quot;</text>
+<text x="24" y="311" font-size="14" fill="#e5e7eb"></text>
+<text x="24" y="332" font-size="14" fill="#e5e7eb">Detected intent: write (confidence 0.81)</text>
+<text x="24" y="353" font-size="14" fill="#e5e7eb">Score: 37 → 92  (+55)</text>
+<text x="24" y="374" font-size="14" fill="#e5e7eb">— Enhanced prompt (copy everything below) —</text>
+<text x="24" y="395" font-size="14" fill="#e5e7eb">You are a professional writer with a clear, natural voice.</text>
+<text x="24" y="416" font-size="14" fill="#e5e7eb">Task: write a story about a dog</text>
+<text x="24" y="437" font-size="14" fill="#e5e7eb">Context: (add 2-3 sentences of background here — who this is for, what you&#x27;ve tried)</text>
+<text x="24" y="458" font-size="14" fill="#e5e7eb">Requirements:</text>
+<text x="24" y="479" font-size="14" fill="#e5e7eb">- No filler phrases or purple prose</text>
+<text x="24" y="500" font-size="14" fill="#e5e7eb">Output format: Match the tone I asked for. Keep paragraphs short.</text>
+<text x="24" y="521" font-size="14" fill="#e5e7eb">Guardrails: if you are unsure about something, say so instead of guessing.</text>
+</svg>

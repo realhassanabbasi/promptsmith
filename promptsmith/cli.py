@@ -7,6 +7,7 @@ import sys
 from . import __version__, enhance
 from .classifier import predict_intent
 from .scorer import grade, score_prompt
+from .skills import SKILL_NAME, render_skill, write_skill
 from .templates import TEMPLATES, names, placeholders, render
 
 # tiny color helpers, no dependencies needed
@@ -147,6 +148,16 @@ def cmd_templates(args):
         print()
 
 
+def cmd_skill(args):
+    if args.out:
+        path = write_skill(args.out)
+        print(f"\n{bold('Skill written to:')} {path}\n")
+        print("Install for Claude Code: copy it under ~/.claude/skills/")
+        print("It also works with Codex and Cursor's skill folders.\n")
+    else:
+        print(render_skill())
+
+
 def cmd_interactive(_args):
     print(bold("\nLet's build your prompt together.\n"))
     goal = input("What do you want the AI to do? ").strip()
@@ -200,6 +211,11 @@ def build_parser():
 
     i = sub.add_parser("interactive", help="Build a prompt through guided questions")
     i.set_defaults(func=cmd_interactive)
+
+    k = sub.add_parser("skill", help="Generate an installable agent skill (SKILL.md)")
+    k.add_argument("--out", metavar="DIR",
+                   help="Write DIR/promptsmith/SKILL.md instead of printing")
+    k.set_defaults(func=cmd_skill)
     return p
 
 

@@ -6,7 +6,8 @@ Zero dependencies, works offline. Built by Hassan Abbasi.
 from .classifier import load_default, predict_intent
 from .enhancer import enhance
 from .scorer import grade, score_prompt
+from .skills import render_skill, write_skill
 from .templates import names, placeholders, render, TEMPLATES
 
-__version__ = "1.2.0"
-__all__ = ["load_default", "predict_intent", "enhance", "score_prompt", "grade", "render", "names", "placeholders", "TEMPLATES"]
+__version__ = "1.3.0"
+__all__ = ["load_default", "predict_intent", "enhance", "score_prompt", "grade", "render", "names", "placeholders", "TEMPLATES", "render_skill", "write_skill"]

@@ -18,6 +18,7 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 - **`batch`** — score every prompt in a file (one per line): averages, weakest prompt, optional `--enhance` that writes `FILE.enhanced.md`
 - **`templates`** — 8 fill-in-the-blank templates (debug code, explain concepts, learn vocabulary, study plans…)
 - **`interactive`** — guided Q&A that builds your prompt with you
+- **`skill`** — generate an installable agent skill (SKILL.md) from the real scoring rubric, so coding agents apply the same 5 checks themselves
 - **From-scratch ML** — intent classifier (Multinomial Naive Bayes) trained on 94 labeled prompts across 8 intents, pure stdlib; shaky guesses fall back to a generic role instead of a confident wrong one
 - **Zero dependencies** — only the Python standard library; runs anywhere, even offline
 
@@ -84,6 +85,23 @@ Weakest: "help me with python" (37/100)
 `--enhance` also rewrites every prompt, reports the average gain, and saves all
 enhanced prompts to `my_prompts.txt.enhanced.md`. `--json` on `score`, `enhance`
 or `batch` prints machine-readable JSON for scripts and pipelines.
+
+## Agent skill export
+
+Coding agents (Claude Code, Codex, Cursor) can use PromptSmith's rubric
+directly — no CLI calls needed:
+
+```bash
+# print the skill, or write it to a skills folder:
+promptsmith skill
+promptsmith skill --out ~/.claude/skills
+```
+
+This writes `~/.claude/skills/promptsmith/SKILL.md`: the 5-check rubric
+(clarity, context, specificity, format, guardrails — 20 points each), all 8
+intent roles with their formats, and a real worked example. The skill is
+generated from the actual code, so it always matches the current version —
+nothing to keep in sync by hand.
 
 ## Demo
 
@@ -192,15 +210,16 @@ promptsmith/
 ├── promptsmith/
 │   ├── __init__.py        # public API
 │   ├── __main__.py        # `python -m promptsmith`
-│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive)
+│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill)
 │   ├── classifier.py      # Naive Bayes intent classifier, from scratch (+0.35 fallback)
 │   ├── enhancer.py        # enhancement pipeline (role → structure → guardrails)
 │   ├── scorer.py          # 5-check rubric, 0-100
+│   ├── skills.py          # `promptsmith skill` — renders an installable agent skill
 │   ├── templates.py       # 8 ready-made templates
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 27 unit tests (scorer, classifier, enhancer, CLI, batch, packaging)
+│   └── test_promptsmith.py  # 33 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

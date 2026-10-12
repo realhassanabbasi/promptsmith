@@ -8,8 +8,9 @@ import tempfile
 import unittest
 
 from promptsmith.classifier import load_default
-from promptsmith.enhancer import enhance
+from promptsmith.enhancer import enhance, ROLES
 from promptsmith.scorer import grade, score_prompt
+from promptsmith.skills import render_skill, write_skill
 from promptsmith.templates import names, placeholders, render
 
 
@@ -224,6 +225,55 @@ class TestPackaging(unittest.TestCase):
         # the exact path that crashed on pip installs before the fix
         result = enhance("write a story about a dog")
         self.assertGreater(result["after"], result["before"])
+
+
+class TestSkill(unittest.TestCase):
+    def test_frontmatter(self):
+        md = render_skill()
+        self.assertTrue(md.startswith("---\n"))
+        self.assertIn("name: promptsmith", md)
+        self.assertIn("description:", md)
+
+    def test_covers_all_five_checks(self):
+        md = render_skill()
+        for check in ["clarity", "context", "specificity", "format", "guardrails"]:
+            self.assertIn(check, md, f"skill missing check: {check}")
+        self.assertIn("20 points each", md)
+
+    def test_covers_all_intent_roles(self):
+        md = render_skill()
+        self.assertEqual(len(ROLES), 8)
+        for intent in ROLES:
+            self.assertIn(f"### {intent}", md, f"skill missing role: {intent}")
+
+    def test_example_is_real_enhance_output(self):
+        # the worked example must come from the real pipeline, gain included
+        from promptsmith.skills import EXAMPLE_ROUGH
+        md = render_skill()
+        result = enhance(EXAMPLE_ROUGH)
+        self.assertGreater(result["after"], result["before"])
+        self.assertIn(str(result["before"]), md)
+        self.assertIn(str(result["after"]), md)
+        self.assertIn(result["prompt"].split("\n")[0], md)
+
+    def test_write_skill_creates_layout(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = write_skill(d)
+            self.assertEqual(path, os.path.join(d, "promptsmith", "SKILL.md"))
+            self.assertTrue(os.path.isfile(path))
+            with open(path, encoding="utf-8") as f:
+                self.assertEqual(f.read(), render_skill())
+
+    def test_skill_cli_prints_and_writes(self):
+        from promptsmith.cli import main
+        with tempfile.TemporaryDirectory() as d:
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                main(["skill", "--out", d])
+            self.assertIn("Skill written to:", out.getvalue())
+            self.assertTrue(os.path.isfile(os.path.join(d, "promptsmith", "SKILL.md")))
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            main(["skill"])
+        self.assertTrue(out.getvalue().startswith("---\nname: promptsmith"))
 
 
 if __name__ == "__main__":

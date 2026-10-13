@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>PromptSmith — Prompt Engineering, Measured</title>
+<meta name="description" content="Score, enhance and compare prompts with PromptSmith's real zero-dependency engine.">
+<style>
+:root{
+  color-scheme:light dark;
+  --paper:#f5f5f3;--paper-2:#ebebe8;--ink:#0b0b0b;--muted:#62625e;
+  --line:#c9c9c4;--soft:#deded9;--inverse:#f7f7f5;--shadow:rgba(0,0,0,.12);
+  --sans:"Manrope",ui-sans-serif,system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media(prefers-color-scheme:dark){:root{--paper:#090909;--paper-2:#141414;--ink:#f3f3ef;--muted:#9b9b95;--line:#343432;--soft:#20201f;--inverse:#090909;--shadow:rgba(0,0,0,.45)}}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:80px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.55;overflow-x:hidden}button,textarea,input{font:inherit;color:inherit}button{cursor:pointer}a{color:inherit}.mono{font-family:var(--mono)}
+.noise{position:fixed;inset:0;pointer-events:none;z-index:20;opacity:.035;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 140 140' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.8'/%3E%3C/svg%3E")}
+.shell{width:min(1180px,calc(100% - 44px));margin:auto}.nav{height:68px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;position:relative;z-index:5}.nav-note{font:500 12px var(--mono);letter-spacing:.04em}.nav-links{display:flex;gap:28px;align-items:center}.nav a{text-decoration:none;font-size:13px;color:var(--muted);transition:color .2s}.nav a:hover{color:var(--ink)}.nav .source{color:var(--ink);padding:8px 13px;border:1px solid var(--ink)}
+.hero{min-height:calc(100svh - 68px);display:grid;grid-template-columns:1.05fr .95fr;align-items:center;gap:7vw;padding:72px 0 64px}.hero-copy{position:relative;z-index:2}.signal{display:flex;align-items:center;gap:9px;font:500 11px var(--mono);color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:24px}.signal i{width:7px;height:7px;background:var(--ink);border-radius:50%;animation:pulse 1.8s ease-out infinite}.hero h1{font-size:clamp(48px,6.6vw,92px);line-height:.94;letter-spacing:-.065em;margin:0;max-width:760px;font-weight:600}.word{display:inline-block;opacity:0;transform:translateY(34px);animation:rise .7s cubic-bezier(.2,.75,.2,1) forwards}.word:nth-child(2){animation-delay:.07s}.word:nth-child(3){animation-delay:.14s}.word:nth-child(4){animation-delay:.21s}.hero-sub{max-width:600px;color:var(--muted);font-size:clamp(17px,2vw,20px);margin:30px 0 0}.hero-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:34px}.btn{border:1px solid var(--ink);background:transparent;padding:13px 18px;font-weight:600;font-size:13px;transition:background .2s,color .2s,transform .2s;position:relative}.btn.primary{background:var(--ink);color:var(--inverse)}.btn:hover{background:var(--ink);color:var(--inverse)}.btn:active{transform:translateY(1px)}.btn:focus-visible,.tab:focus-visible,textarea:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+.forge{height:min(580px,68vh);min-height:480px;border:1px solid var(--line);position:relative;overflow:hidden;background:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:42px 42px}.forge::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at var(--mx,50%) var(--my,50%),transparent 0,transparent 17%,var(--paper) 62%);opacity:.68;pointer-events:none}.forge-head{position:absolute;z-index:2;top:16px;left:16px;right:16px;display:flex;justify-content:space-between;font:500 10px var(--mono);letter-spacing:.09em;color:var(--muted)}.rail{position:absolute;z-index:2;left:50%;top:76px;bottom:58px;width:1px;background:var(--line)}.rail::after{content:"";position:absolute;width:7px;height:42px;left:-3px;top:0;background:var(--ink);animation:scan 4.8s ease-in-out infinite}.node{position:absolute;z-index:3;left:50%;transform:translateX(-50%);width:min(310px,77%);background:var(--paper);border:1px solid var(--ink);padding:18px}.node.a{top:110px}.node.b{bottom:88px}.node-tag{font:500 10px var(--mono);color:var(--muted);display:flex;justify-content:space-between;text-transform:uppercase;letter-spacing:.08em}.node p{font-size:14px;line-height:1.5;margin:13px 0 0}.node.a p{color:var(--muted)}.node.b{background:var(--ink);color:var(--inverse)}.node.b .node-tag{color:color-mix(in srgb,var(--inverse),transparent 35%)}.mini-score{position:absolute;z-index:3;right:18px;top:50%;transform:translateY(-50%);font:500 11px var(--mono);writing-mode:vertical-rl;color:var(--muted)}.float-label{position:absolute;z-index:3;left:20px;top:49%;font:500 10px var(--mono);color:var(--muted);display:grid;gap:7px}.float-label span{opacity:0;animation:labelIn 4.8s ease infinite}.float-label span:nth-child(2){animation-delay:.3s}.float-label span:nth-child(3){animation-delay:.6s}.float-label span:nth-child(4){animation-delay:.9s}.float-label span:nth-child(5){animation-delay:1.2s}
+.section{padding:110px 0;border-top:1px solid var(--line)}.section-head{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-bottom:48px}.kicker{font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}.section h2{font-size:clamp(34px,4.6vw,64px);line-height:1.02;letter-spacing:-.045em;margin:0;font-weight:600}.section-intro{color:var(--muted);max-width:520px;margin:6px 0 0;align-self:end}.workbench{border:1px solid var(--ink);background:var(--paper)}.tabs{display:flex;gap:0;border-bottom:1px solid var(--ink);overflow:hidden}.tab{flex:1;border:0;border-right:1px solid var(--line);background:var(--paper);padding:15px 10px;font:500 12px var(--mono);color:var(--muted);transition:.2s}.tab:last-child{border-right:0}.tab.active{background:var(--ink);color:var(--inverse)}.panel{display:none;padding:30px}.panel.active{display:block;animation:panel .42s cubic-bezier(.2,.8,.2,1)}.field-label{display:flex;justify-content:space-between;margin-bottom:9px;font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}.field-label em{font-style:normal;text-transform:none;letter-spacing:0}textarea,input{width:100%;border:1px solid var(--line);background:var(--paper-2);border-radius:0;padding:16px;resize:vertical;outline:none;font-size:15px;line-height:1.6}textarea:focus,input:focus{border-color:var(--ink)}.action-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:14px}.hint{font:400 11px var(--mono);color:var(--muted)}.results{margin-top:28px;border-top:1px solid var(--line);padding-top:28px}.results[hidden]{display:none}.score-grid{display:grid;grid-template-columns:180px 1fr;gap:34px;align-items:center}.score-figure{width:156px;height:156px;position:relative}.ring{width:100%;height:100%;transform:rotate(-90deg)}.ring circle{fill:none;stroke-width:6}.ring-bg{stroke:var(--soft)}.ring-fg{stroke:var(--ink);stroke-dasharray:339.292;stroke-dashoffset:339.292;transition:stroke-dashoffset .9s cubic-bezier(.2,.8,.2,1)}.ring-value{position:absolute;inset:0;display:grid;place-content:center;text-align:center}.ring-value strong{font-size:44px;letter-spacing:-.06em;line-height:1}.ring-value span{font:400 10px var(--mono);color:var(--muted);margin-top:4px}.grade-line{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:0 0 14px;margin-bottom:14px}.grade{font:500 12px var(--mono);text-transform:uppercase}.bar-row{display:grid;grid-template-columns:96px 1fr 42px;gap:10px;align-items:center;margin:9px 0;font:400 11px var(--mono)}.bar-track{height:5px;background:var(--soft)}.bar-fill{height:100%;background:var(--ink);width:0;transition:width .75s cubic-bezier(.2,.8,.2,1)}.feedback{list-style:none;padding:0;margin:22px 0 0;border-top:1px solid var(--line)}.feedback li{padding:11px 0;border-bottom:1px solid var(--line);font-size:13px;color:var(--muted);display:flex;gap:10px}.feedback li::before{content:"—";color:var(--ink)}.intent-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.chip{border:1px solid var(--ink);padding:5px 9px;font:500 11px var(--mono);text-transform:uppercase}.score-shift{display:grid;grid-template-columns:1fr auto 1fr;align-items:end;margin:28px 0 22px;border-bottom:1px solid var(--line);padding-bottom:22px}.score-shift div{display:grid}.score-shift span{font:400 10px var(--mono);color:var(--muted);text-transform:uppercase}.score-shift strong{font-size:48px;letter-spacing:-.05em;line-height:1}.score-shift i{font-style:normal;font-size:24px;padding:0 20px}.output{white-space:pre-wrap;word-break:break-word;background:var(--ink);color:var(--inverse);padding:22px;margin:0;font:400 12px/1.7 var(--mono);max-height:430px;overflow:auto}.copy-status{font:400 11px var(--mono);color:var(--muted)}.compare-inputs{display:grid;grid-template-columns:1fr 1fr;gap:14px}.versus{display:grid;grid-template-columns:1fr 1fr;gap:20px}.side-head{display:flex;justify-content:space-between;align-items:end;margin-bottom:8px;font:500 12px var(--mono)}.side-score{font:600 38px var(--sans);letter-spacing:-.05em}.track{height:9px;background:var(--soft)}.fill{height:100%;background:var(--ink);width:0;transition:width .8s cubic-bezier(.2,.8,.2,1)}.verdict{font-size:22px;font-weight:600;letter-spacing:-.025em;margin:25px 0 14px}.deltas{display:flex;gap:7px;flex-wrap:wrap}.delta{font:400 10px var(--mono);border:1px solid var(--line);padding:5px 8px}.classifier-grid{display:grid;grid-template-columns:.9fr 1.1fr;gap:60px;align-items:start}.intent-bars{margin-top:20px}.ibar-row{display:grid;grid-template-columns:80px 1fr 40px;gap:10px;align-items:center;margin:13px 0;font:400 11px var(--mono)}.ibar-track{height:7px;background:var(--soft)}.ibar-fill{height:100%;background:var(--ink);width:0;transition:width .5s}.process{border-left:1px solid var(--line)}.process-step{display:grid;grid-template-columns:64px 1fr;gap:18px;padding:0 0 28px 22px;position:relative}.process-step::before{content:"";position:absolute;left:-4px;top:5px;width:7px;height:7px;background:var(--paper);border:1px solid var(--ink)}.process-step span{font:500 11px var(--mono);color:var(--muted)}.process-step h3{margin:0 0 6px;font-size:15px}.process-step p{margin:0;color:var(--muted);font-size:13px}.rubric{display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--ink);border-bottom:1px solid var(--ink)}.rubric-item{padding:20px 18px 24px;border-right:1px solid var(--line);min-height:210px;transition:background .25s,color .25s}.rubric-item:last-child{border-right:0}.rubric-item:hover{background:var(--ink);color:var(--inverse)}.rubric-item .num{font:500 10px var(--mono);color:var(--muted)}.rubric-item h3{margin:52px 0 9px;font-size:17px}.rubric-item p{font-size:12px;line-height:1.55;color:var(--muted);margin:0}.rubric-item:hover p,.rubric-item:hover .num{color:color-mix(in srgb,var(--inverse),transparent 30%)}.metrics{display:grid;grid-template-columns:repeat(4,1fr);margin-top:28px;border-bottom:1px solid var(--line)}.metric{padding:26px 0;border-right:1px solid var(--line);text-align:center}.metric:last-child{border-right:0}.metric strong{display:block;font-size:38px;letter-spacing:-.05em}.metric span{font:400 10px var(--mono);color:var(--muted);text-transform:uppercase}.install{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:center;background:var(--ink);color:var(--inverse);padding:22px;margin-top:50px}.install code{font:400 12px var(--mono);overflow-wrap:anywhere}.install .btn{border-color:var(--inverse);color:var(--inverse)}.footer{padding:34px 0 60px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:20px;color:var(--muted);font-size:12px}.footer a{text-decoration:none;color:var(--ink)}
+.reveal{opacity:1;transform:none}.reveal.in{animation:softReveal .65s cubic-bezier(.2,.8,.2,1)}
+@keyframes rise{to{opacity:1;transform:none}}@keyframes pulse{0%{box-shadow:0 0 0 0 var(--ink)}70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}@keyframes scan{0%,100%{top:0}50%{top:calc(100% - 42px)}}@keyframes labelIn{0%,20%,100%{opacity:0;transform:translateX(-5px)}30%,70%{opacity:1;transform:none}}@keyframes panel{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}@keyframes softReveal{from{opacity:.15;transform:translateY(14px)}to{opacity:1;transform:none}}
+@media(max-width:850px){.hero{grid-template-columns:1fr;min-height:auto;padding-top:64px}.forge{height:500px}.section-head,.classifier-grid{grid-template-columns:1fr}.rubric{grid-template-columns:1fr 1fr}.rubric-item{border-bottom:1px solid var(--line)}.rubric-item:nth-child(2n){border-right:0}.rubric-item:last-child{grid-column:1/-1}.metrics{grid-template-columns:1fr 1fr}.metric:nth-child(2){border-right:0}.metric:nth-child(-n+2){border-bottom:1px solid var(--line)}}
+@media(max-width:560px){.shell{width:min(100% - 26px,1180px)}.nav-links a:not(.source){display:none}.hero{padding:48px 0 42px;gap:48px}.hero h1{font-size:clamp(43px,14vw,68px)}.hero-sub{font-size:16px}.hero-actions .btn{flex:1}.forge{height:450px;min-height:450px}.node{width:82%;padding:15px}.float-label{display:none}.mini-score{right:8px}.section{padding:78px 0}.section-head{margin-bottom:30px}.panel{padding:18px}.tabs{display:grid;grid-template-columns:repeat(3,1fr)}.score-grid{grid-template-columns:1fr}.score-figure{margin:auto}.action-row{align-items:stretch;flex-direction:column}.action-row .btn{width:100%}.compare-inputs,.versus{grid-template-columns:1fr}.score-shift strong{font-size:38px}.rubric{grid-template-columns:1fr}.rubric-item,.rubric-item:nth-child(2n){border-right:0;min-height:auto}.rubric-item:last-child{grid-column:auto}.rubric-item h3{margin-top:25px}.install{grid-template-columns:1fr}.footer{flex-direction:column}.ibar-row{grid-template-columns:65px 1fr 36px}.bar-row{grid-template-columns:82px 1fr 38px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation:none!important;transition-duration:.01ms!important}.word,.reveal{opacity:1;transform:none}.rail::after{top:35%}}
+</style>
+</head>
+<body>
+<div class="noise" aria-hidden="true"></div>
+<div class="shell">
+  <nav class="nav" aria-label="Page navigation">
+    <span class="nav-note">PROMPT ENGINEERING / MEASURED</span>
+    <div class="nav-links">
+      <a href="#lab">Lab</a><a href="#engine">Engine</a>
+      <a class="source" href="https://github.com/realhassanabbasi/promptsmith" target="_blank" rel="noopener">View source ↗</a>
+    </div>
+  </nav>
+  <header class="hero">
+    <div class="hero-copy">
+      <div class="signal"><i></i> real engine / browser-side</div>
+      <h1><span class="word">Turn</span> <span class="word">rough</span> <span class="word">asks</span><br><span class="word">into sharp prompts.</span></h1>
+      <p class="hero-sub">Score, diagnose, and restructure prompts with a deterministic five-check rubric and a from-scratch intent classifier.</p>
+      <div class="hero-actions"><a class="btn primary" href="#lab">Test a prompt</a><button class="btn" id="demo-jump" type="button">Run quick demo</button></div>
+    </div>
+    <div class="forge" id="forge" aria-label="Animation showing a rough prompt becoming an engineered prompt">
+      <div class="forge-head"><span>ROUGH INPUT</span><span>ENGINEERED OUTPUT</span></div>
+      <div class="rail"></div>
+      <div class="node a"><div class="node-tag"><span>Input / 01</span><span id="hero-before">37/100</span></div><p id="hero-rough">help me with python</p></div>
+      <div class="float-label"><span>CLARITY</span><span>CONTEXT</span><span>SPECIFICITY</span><span>FORMAT</span><span>GUARDRAILS</span></div>
+      <div class="mini-score">+55 POINTS / EXPLAINABLE</div>
+      <div class="node b"><div class="node-tag"><span>Output / 02</span><span id="hero-after">92/100</span></div><p id="hero-strong">You are a senior software engineer. Diagnose the issue, handle edge cases, then provide code followed by a brief explanation.</p></div>
+    </div>
+  </header>
+
+  <main>
+    <section class="section" id="lab">
+      <div class="section-head reveal"><div><div class="kicker">Interactive workbench</div><h2>The tool, not a mockup.</h2></div><p class="section-intro">Every control below runs PromptSmith’s actual scoring, enhancement, comparison, and classification logic locally in your browser.</p></div>
+      <div class="workbench reveal">
+        <div class="tabs" role="tablist" aria-label="Prompt tools">
+          <button class="tab active" role="tab" aria-selected="true" aria-controls="score-panel" data-tab="score">01 / Score</button>
+          <button class="tab" role="tab" aria-selected="false" aria-controls="enhance-panel" data-tab="enhance">02 / Enhance</button>
+          <button class="tab" role="tab" aria-selected="false" aria-controls="compare-panel" data-tab="compare">03 / Compare</button>
+        </div>
+        <div class="panel active" id="score-panel" role="tabpanel">
+          <label class="field-label" for="score-input"><span>Your prompt</span><em>Five checks · 20 points each</em></label>
+          <textarea id="score-input" rows="5">Write a professional cold email for a graphic designer applying to a marketing agency in Lahore. Keep it under 150 words. Use bullet points for skills. Don't use filler phrases.</textarea>
+          <div class="action-row"><span class="hint" id="score-count">27 words</span><button class="btn primary" id="score-btn" type="button">Score prompt</button></div>
+          <div class="results" id="score-results" hidden aria-live="polite">
+            <div class="score-grid"><div class="score-figure"><svg class="ring" viewBox="0 0 120 120" aria-hidden="true"><circle class="ring-bg" cx="60" cy="60" r="54"/><circle class="ring-fg" id="score-ring" cx="60" cy="60" r="54"/></svg><div class="ring-value"><strong id="score-number">0</strong><span>/100</span></div></div><div><div class="grade-line"><span class="grade" id="score-grade">—</span><span class="hint" id="score-note"></span></div><div id="score-bars"></div></div></div>
+            <ul class="feedback" id="score-feedback"></ul>
+          </div>
+        </div>
+        <div class="panel" id="enhance-panel" role="tabpanel" hidden>
+          <label class="field-label" for="enhance-input"><span>Rough prompt</span><em>Intent-aware structure</em></label>
+          <textarea id="enhance-input" rows="4">fix my code it doesn't work</textarea>
+          <div class="action-row"><span class="hint">Your task text stays intact.</span><button class="btn primary" id="enhance-btn" type="button">Enhance prompt</button></div>
+          <div class="results" id="enhance-results" hidden aria-live="polite">
+            <div class="intent-row"><span class="hint">Detected intent</span><span class="chip" id="intent-chip">—</span><span class="hint" id="intent-confidence"></span></div>
+            <div class="score-shift"><div><span>Before</span><strong id="before-score">0</strong></div><i>→</i><div><span>After</span><strong id="after-score">0</strong></div></div>
+            <label class="field-label"><span>Engineered prompt</span><em id="gain-label">+0 points</em></label>
+            <pre class="output" id="enhance-output"></pre>
+            <div class="action-row"><span class="copy-status" id="copy-status" aria-live="polite"></span><button class="btn" id="copy-btn" type="button">Copy result</button></div>
+          </div>
+        </div>
+        <div class="panel" id="compare-panel" role="tabpanel" hidden>
+          <div class="compare-inputs"><div><label class="field-label" for="compare-a"><span>Prompt A</span><em>Baseline</em></label><textarea id="compare-a" rows="5">write a poem</textarea></div><div><label class="field-label" for="compare-b"><span>Prompt B</span><em>Revision</em></label><textarea id="compare-b" rows="5">Write a haiku about monsoon rain in Islamabad. Match a calm tone. Keep paragraphs short. No filler phrases. Say what the answer should look like: short stanzas.</textarea></div></div>
+          <div class="action-row"><span class="hint">Same rubric. Side by side.</span><button class="btn primary" id="compare-btn" type="button">Compare prompts</button></div>
+          <div class="results" id="compare-results" hidden aria-live="polite"><div class="versus"><div><div class="side-head"><span>A</span><span class="side-score" id="a-score">0</span></div><div class="track"><div class="fill" id="a-fill"></div></div></div><div><div class="side-head"><span>B</span><span class="side-score" id="b-score">0</span></div><div class="track"><div class="fill" id="b-fill"></div></div></div></div><div class="verdict" id="verdict"></div><div class="deltas" id="deltas"></div><ul class="feedback" id="compare-feedback"></ul></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="engine">
+      <div class="section-head reveal"><div><div class="kicker">Under the hood</div><h2>Small model. Clear logic.</h2></div><p class="section-intro">A Multinomial Naive Bayes classifier, written from scratch. Type a task to see its top three intent predictions update live.</p></div>
+      <div class="classifier-grid reveal"><div><label class="field-label" for="classifier-input"><span>Live classifier</span><em>Try: debug my login error</em></label><input id="classifier-input" autocomplete="off" placeholder="Type a task…"><div class="intent-bars" id="intent-bars"><p class="hint">Predictions appear after three characters.</p></div></div><div class="process"><div class="process-step"><span>01</span><div><h3>Tokenize</h3><p>Reduce the prompt to meaningful lowercase words.</p></div></div><div class="process-step"><span>02</span><div><h3>Classify</h3><p>Score eight intents against 94 real labeled examples.</p></div></div><div class="process-step"><span>03</span><div><h3>Structure</h3><p>Attach the right role, requirements, format, and guardrails.</p></div></div></div></div>
+      <div class="metrics reveal"><div class="metric"><strong data-count="40">40</strong><span>tests passing</span></div><div class="metric"><strong data-count="94">94</strong><span>training prompts</span></div><div class="metric"><strong data-count="8">8</strong><span>intent classes</span></div><div class="metric"><strong data-count="0">0</strong><span>dependencies</span></div></div>
+    </section>
+
+    <section class="section">
+      <div class="section-head reveal"><div><div class="kicker">The rubric</div><h2>Five checks. No mystery score.</h2></div><p class="section-intro">Each dimension is visible, deterministic, and worth twenty points. PromptSmith tells you what failed and what to fix.</p></div>
+      <div class="rubric reveal"><article class="rubric-item"><span class="num">01 / 20</span><h3>Clarity</h3><p>Starts with a direct action instead of burying the ask.</p></article><article class="rubric-item"><span class="num">02 / 20</span><h3>Context</h3><p>Includes enough background for a grounded response.</p></article><article class="rubric-item"><span class="num">03 / 20</span><h3>Specificity</h3><p>Uses concrete names, numbers, tools, or constraints.</p></article><article class="rubric-item"><span class="num">04 / 20</span><h3>Format</h3><p>Defines what the answer should look like.</p></article><article class="rubric-item"><span class="num">05 / 20</span><h3>Guardrails</h3><p>Sets tone, limits, and an honesty rule.</p></article></div>
+      <div class="install reveal"><code id="install-command">pip install git+https://github.com/realhassanabbasi/promptsmith.git</code><button class="btn" id="install-copy" type="button">Copy install command</button></div>
+    </section>
+  </main>
+  <footer class="footer"><span>Python 3.9+ · MIT · zero dependencies</span><span>Built by Hassan Abbasi · <a href="https://github.com/realhassanabbasi/promptsmith" target="_blank" rel="noopener">GitHub ↗</a></span></footer>
+</div>
+<script>
+"use strict";
+/* Generated from promptsmith/data/training_prompts.json — the real 94 training examples. Do not hand-edit. */
+const TRAINING_DATA = {"_note": "Tiny labeled set of prompts per intent. Used to train the built-in Naive Bayes intent classifier. Keep it small and readable.", "intents": {"analyze": ["analyze this sales data and tell me the trends", "compare these two phones and recommend one", "what are the pros and cons of remote work", "analyze the sentiment of these customer reviews", "summarize this article in three bullet points", "compare python vs javascript for web backends", "review my resume and suggest improvements", "analyze this survey data, what stands out", "summarize the key points of this report", "what are the risks of this business plan"], "code": ["write a python function that sorts a list", "help me write a sql query to find duplicate rows", "create a react component for a login form", "how do i reverse a linked list in java", "write a bash script that backs up my files", "fix this javascript code it throws an error", "generate a rest api endpoint in flask", "show me how to read a csv file with pandas", "write a function to check if a string is a palindrome", "convert this python code to javascript", "write a program that finds prime numbers", "convert my python script to javascript", "generate boilerplate for an express server"], "debug": ["my code crashes with null pointer exception, why", "this python script gives indexerror, help me fix it", "my website shows a blank page, how do i debug it", "getting a 500 error from my api, what could be wrong", "my loop runs forever, how do i find the bug", "typescript complains about type mismatch, how to fix", "my program is slow, help me find the bottleneck", "why does my regex not match this string", "docker container keeps restarting, how to troubleshoot", "my test fails only sometimes, what is going on", "my wifi keeps disconnecting every ten minutes", "my phone battery drains too fast, what could cause it", "the printer is not responding, how do i troubleshoot it"], "explain": ["explain recursion like i'm five", "what is a neural network in simple words", "explain how blockchain works", "what does this python code do", "explain the difference between tcp and udp", "teach me about big o notation", "what is overfitting in machine learning", "explain how git rebase works", "what is an api, explained simply", "explain quantum computing basics"], "learn": ["teach me the vocabulary of photography", "what are the key terms in digital marketing i should know", "explain important concepts of graphic design for beginners", "give me essential vocabulary for data science", "what terms should i know before learning ui design", "teach me basic economics terms with examples", "key vocabulary for understanding ai research papers", "important terms in video editing i must know", "explain stock market terms for a beginner", "what is the core vocabulary of web development", "how do i learn french verbs fast", "i want to learn the basics of photography", "teach me how to play chess from scratch", "what is the best way to learn python as a beginner", "i want to understand calculus step by step", "i want to get better at public speaking, where do i start"], "plan": ["make a study plan for my exams next month", "plan a 5 day trip to northern pakistan on a budget", "create a workout routine for beginners", "help me plan my week, i have classes and a part time job", "make a learning roadmap for machine learning", "plan a birthday party for 20 people", "create a content calendar for my youtube channel", "help me plan a product launch step by step", "make a budget plan for a student", "plan my final year project timeline"], "write": ["write an email to my professor asking for an extension", "draft a cover letter for a data science internship", "write a product description for a smart watch", "help me write a birthday message for my friend", "write an instagram caption for my artwork", "compose a formal complaint letter to my landlord", "write a short story about a robot", "draft a resignation letter", "write a blog intro about remote work", "help me write a wedding speech"], "chat": ["hello, how are you today", "good morning", "what is the capital of france", "translate good morning to urdu", "tell me a joke about programmers", "what do you think about pineapple on pizza", "who won the football world cup in 2022", "give me a fun fact about space", "how are you doing", "thanks for your help", "what is your name", "is it going to rain today"]}};
+/* PromptSmith web engine — a faithful port of the Python package.
+ * scorer.py, classifier.py, enhancer.py, compare.py (v1.4.0).
+ * The classifier trains in-browser on the REAL 94 training examples
+ * (data.js, generated from promptsmith/data/training_prompts.json).
+ * Zero dependencies. Everything runs locally.
+ */
+"use strict";
+
+/* ---------------- scorer ---------------- */
+
+const ACTION_WORDS = new Set([
+  "write", "explain", "analyze", "compare", "summarize", "create", "make",
+  "generate", "draft", "list", "describe", "teach", "show", "help", "plan",
+  "review", "fix", "debug", "convert", "design", "suggest", "recommend",
+]);
+
+const FORMAT_HINTS = [
+  "bullet", "bullets", "table", "list", "code", "json", "paragraph",
+  "step-by-step", "steps", "example", "examples", "summary", "outline",
+];
+
+const GUARDRAIL_HINTS = [
+  "don't", "do not", "avoid", "instead of", "if unsure", "say so",
+  "no more than", "at most", "keep it", "simple", "beginner",
+];
+
+function _hasCount(hints, lowerText) {
+  let c = 0;
+  for (const w of hints) if (lowerText.includes(w)) c++;
+  return c;
+}
+
+function scorePrompt(text) {
+  text = text.trim();
+  const words = text.split(/\s+/).filter(Boolean);
+  const n = words.length;
+  const lower = text.toLowerCase();
+  const breakdown = {};
+  const feedback = [];
+
+  // 1. clarity — does it open with a clear action?
+  const first = words.length ? words[0].toLowerCase().replace(/[.,!?]+$/, "") : "";
+  let s;
+  if (ACTION_WORDS.has(first)) {
+    s = 20;
+  } else if (_hasCount(ACTION_WORDS, lower) >= 1) {
+    s = 12;
+    feedback.push("Put the action verb first ('Write…', 'Explain…') instead of burying it.");
+  } else {
+    s = 4;
+    feedback.push("No clear action. Start with what you want: write, explain, analyze…");
+  }
+  breakdown.clarity = s;
+
+  // 2. context — is there background for the model to work with?
+  if (n >= 40) s = 20;
+  else if (n >= 20) s = 14;
+  else if (n >= 10) {
+    s = 8;
+    feedback.push("Add background: who it's for, what it's about, what you already tried.");
+  } else {
+    s = 3;
+    feedback.push("Too short to carry context. Add 2-3 sentences of background.");
+  }
+  breakdown.context = s;
+
+  // 3. specificity — concrete details, numbers, names
+  const numbers = (text.match(/\b\d+\b/g) || []).length;
+  const concrete = numbers + _hasCount(["for", "about", "using", "with", "in"], lower);
+  if (concrete >= 4) s = 20;
+  else if (concrete >= 2) s = 13;
+  else {
+    s = 5;
+    feedback.push("Be specific: names, numbers, versions, examples of what 'good' looks like.");
+  }
+  breakdown.specificity = s;
+
+  // 4. output format — did you say what the answer should look like?
+  if (_hasCount(FORMAT_HINTS, lower) >= 1) s = 20;
+  else {
+    s = 4;
+    feedback.push("Say what the answer should look like: bullets, table, code, steps…");
+  }
+  breakdown.format = s;
+
+  // 5. guardrails — tone, scope, honesty rules
+  if (_hasCount(GUARDRAIL_HINTS, lower) >= 1) s = 20;
+  else {
+    s = 5;
+    feedback.push("Add one guardrail: tone, length limit, or 'say when unsure'.");
+  }
+  breakdown.guardrails = s;
+
+  const total = breakdown.clarity + breakdown.context + breakdown.specificity +
+                breakdown.format + breakdown.guardrails;
+  return { total, breakdown, feedback };
+}
+
+function grade(total) {
+  if (total >= 85) return "excellent";
+  if (total >= 70) return "good";
+  if (total >= 50) return "okay";
+  return "weak";
+}
+
+/* ---------------- classifier (Naive Bayes, from scratch) ---------------- */
+
+function tokenize(text) {
+  return (text.toLowerCase().match(/[a-z]+/g) || []).filter((w) => w.length > 2);
+}
+
+class NaiveBayesIntent {
+  constructor() {
+    this.classes = [];
+    this.logPrior = {};
+    this.logLikelihood = {};
+    this.vocab = new Set();
+  }
+  train(labeled) {
+    this.classes = Object.keys(labeled).sort();
+    const docCounts = {};
+    for (const c of this.classes) docCounts[c] = labeled[c].length;
+    const totalDocs = this.classes.reduce((a, c) => a + docCounts[c], 0);
+    for (const c of this.classes) {
+      this.logPrior[c] = Math.log((docCounts[c] + 1) / (totalDocs + this.classes.length));
+    }
+    const wordCounts = {};
+    for (const c of this.classes) {
+      wordCounts[c] = {};
+      for (const ex of labeled[c]) {
+        for (const w of tokenize(ex)) {
+          this.vocab.add(w);
+          wordCounts[c][w] = (wordCounts[c][w] || 0) + 1;
+        }
+      }
+    }
+    const v = this.vocab.size;
+    for (const c of this.classes) {
+      const totalWords = Object.values(wordCounts[c]).reduce((a, b) => a + b, 0);
+      this.logLikelihood[c] = {};
+      for (const w of this.vocab) {
+        this.logLikelihood[c][w] =
+          Math.log(((wordCounts[c][w] || 0) + 1) / (totalWords + v));
+      }
+      this.logLikelihood[c]["<UNK>"] = Math.log(1 / (totalWords + v));
+    }
+  }
+  predict(text) {
+    const words = tokenize(text);
+    const scores = {};
+    for (const c of this.classes) {
+      let sc = this.logPrior[c];
+      for (const w of words) {
+        sc += this.logLikelihood[c][w] !== undefined
+          ? this.logLikelihood[c][w]
+          : this.logLikelihood[c]["<UNK>"];
+      }
+      scores[c] = sc;
+    }
+    let best = this.classes[0];
+    for (const c of this.classes) if (scores[c] > scores[best]) best = c;
+    const m = scores[best];
+    const exps = {};
+    let total = 0;
+    for (const c of this.classes) {
+      exps[c] = Math.exp(scores[c] - m);
+      total += exps[c];
+    }
+    return { intent: best, confidence: Math.round((exps[best] / total) * 100) / 100 };
+  }
+  topK(text, k) {
+    const words = tokenize(text);
+    const scores = {};
+    for (const c of this.classes) {
+      let sc = this.logPrior[c];
+      for (const w of words) {
+        sc += this.logLikelihood[c][w] !== undefined
+          ? this.logLikelihood[c][w]
+          : this.logLikelihood[c]["<UNK>"];
+      }
+      scores[c] = sc;
+    }
+    const m = Math.max(...Object.values(scores));
+    const exps = {};
+    let total = 0;
+    for (const c of this.classes) {
+      exps[c] = Math.exp(scores[c] - m);
+      total += exps[c];
+    }
+    return this.classes
+      .map((c) => ({ intent: c, confidence: Math.round((exps[c] / total) * 100) / 100 }))
+      .sort((a, b) => b.confidence - a.confidence)
+      .slice(0, k);
+  }
+}
+
+const FALLBACK_CONFIDENCE = 0.35;
+let _clf = null;
+function getClassifier() {
+  if (!_clf) {
+    _clf = new NaiveBayesIntent();
+    _clf.train(TRAINING_DATA.intents);
+  }
+  return _clf;
+}
+
+function predictIntent(text) {
+  const { intent, confidence } = getClassifier().predict(text);
+  if (confidence < FALLBACK_CONFIDENCE) return { intent: "chat", confidence };
+  return { intent, confidence };
+}
+
+/* ---------------- enhancer ---------------- */
+
+const ROLES = {
+  code: "You are a senior software engineer who writes clean, well-commented code.",
+  debug: "You are a patient debugging expert. Diagnose first, then fix.",
+  explain: "You are a teacher who explains hard ideas with simple words and everyday examples.",
+  write: "You are a professional writer with a clear, natural voice.",
+  analyze: "You are a sharp analyst. Be honest about what the data does and doesn't show.",
+  plan: "You are a practical planner. Keep it realistic and step by step.",
+  learn: "You are a friendly tutor. Teach the key terms first, then build up with examples.",
+  chat: "You are a helpful assistant.",
+};
+
+const FORMATS = {
+  code: "Provide the code first, then a short explanation of how it works.",
+  debug: "Give: 1) likely cause, 2) how to confirm it, 3) the fix.",
+  explain: "Use short paragraphs, one everyday example, and end with a one-line recap.",
+  write: "Match the tone I asked for. Keep paragraphs short.",
+  analyze: "Use bullet points for findings and end with a clear recommendation.",
+  plan: "Present as numbered steps with rough time estimates.",
+  learn: "For each term: definition in plain words, then a real-life example.",
+  chat: "Answer directly and concisely.",
+};
+
+const REQUIREMENTS = {
+  code: "- Handle edge cases\n- Add brief comments on the tricky parts",
+  debug: "- Ask for the exact error message if I didn't include it",
+  explain: "- Avoid jargon; when a technical word is needed, define it",
+  write: "- No filler phrases or purple prose",
+  analyze: "- Separate facts from your interpretation",
+  plan: "- Flag anything that depends on someone else or costs money",
+  learn: "- Order terms from basic to advanced",
+  chat: "",
+};
+
+function enhance(raw, intentHint) {
+  raw = raw.trim();
+  let intent, confidence;
+  if (intentHint) {
+    ({ intent, confidence } = intentHint);
+  } else {
+    ({ intent, confidence } = predictIntent(raw));
+  }
+  const before = scorePrompt(raw).total;
+  const role = ROLES[intent] || ROLES.chat;
+  const fmt = FORMATS[intent] || FORMATS.chat;
+  const reqs = REQUIREMENTS[intent] || "";
+
+  const parts = [role, "", `Task: ${raw}`, ""];
+  parts.push("Context: (add 2-3 sentences of background here — who this is for, what you've tried)");
+  parts.push("");
+  if (reqs) {
+    parts.push("Requirements:");
+    parts.push(reqs);
+    parts.push("");
+  }
+  parts.push(`Output format: ${fmt}`);
+  parts.push("Guardrails: if you are unsure about something, say so instead of guessing.");
+  const prompt = parts.join("\n");
+
+  const after = scorePrompt(prompt).total;
+  return { intent, confidence, before, after, gain: after - before, prompt };
+}
+
+/* ---------------- compare ---------------- */
+
+function comparePrompts(a, b) {
+  const ra = scorePrompt(a);
+  const rb = scorePrompt(b);
+  const deltas = {};
+  for (const k of Object.keys(ra.breakdown)) deltas[k] = rb.breakdown[k] - ra.breakdown[k];
+  let winner, margin;
+  if (rb.total > ra.total) { winner = "b"; margin = rb.total - ra.total; }
+  else if (ra.total > rb.total) { winner = "a"; margin = ra.total - rb.total; }
+  else { winner = "tie"; margin = 0; }
+  return {
+    a: { prompt: a, score: ra.total, grade: grade(ra.total), breakdown: ra.breakdown, feedback: ra.feedback },
+    b: { prompt: b, score: rb.total, grade: grade(rb.total), breakdown: rb.breakdown, feedback: rb.feedback },
+    deltas, winner, margin,
+  };
+}
+
+/* UMD-ish export for node testing + browser globals */
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { scorePrompt, grade, predictIntent, enhance, comparePrompts, getClassifier, NaiveBayesIntent, tokenize };
+}
+
+const $=id=>document.getElementById(id);
+const checks=["clarity","context","specificity","format","guardrails"];
+const reduceMotion=matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function words(text){return text.trim()?text.trim().split(/\s+/).length:0}
+function countUp(el,target,duration=700){if(reduceMotion){el.textContent=target;return}const start=performance.now();function frame(now){const p=Math.min(1,(now-start)/duration);el.textContent=Math.round(target*(1-Math.pow(1-p,3)));if(p<1)requestAnimationFrame(frame)}requestAnimationFrame(frame)}
+async function copyText(text,button,status){let copied=false;try{await navigator.clipboard.writeText(text);copied=true}catch(e){const area=document.createElement("textarea");area.value=text;area.style.position="fixed";area.style.opacity="0";document.body.appendChild(area);area.select();copied=document.execCommand("copy");area.remove()}if(status)status.textContent=copied?"Copied to clipboard.":"Select the text above to copy.";const old=button.textContent;button.textContent=copied?"Copied":"Copy failed";setTimeout(()=>{button.textContent=old;if(status)status.textContent=""},1500)}
+
+const observer=new IntersectionObserver(entries=>entries.forEach(entry=>{if(!entry.isIntersecting)return;entry.target.classList.add("in");observer.unobserve(entry.target);entry.target.querySelectorAll("[data-count]").forEach(el=>countUp(el,Number(el.dataset.count),1000))}),{threshold:.12});
+document.querySelectorAll(".reveal").forEach(el=>observer.observe(el));
+
+const forge=$("forge");forge.addEventListener("pointermove",e=>{const r=forge.getBoundingClientRect();forge.style.setProperty("--mx",`${((e.clientX-r.left)/r.width)*100}%`);forge.style.setProperty("--my",`${((e.clientY-r.top)/r.height)*100}%`)});
+
+const demoPairs=[
+  ["help me with python","37/100","You are a senior software engineer. Diagnose the issue, handle edge cases, then provide code followed by a brief explanation.","92/100"],
+  ["make a study plan","37/100","Create a realistic four-week study plan with numbered steps, weekly checkpoints, time estimates, and clear dependencies.","92/100"],
+  ["analyze this data","37/100","Analyze the supplied sales data. Separate facts from interpretation, show findings as bullets, then end with one recommendation.","92/100"]
+];
+let pairIndex=0;function cycleHero(){pairIndex=(pairIndex+1)%demoPairs.length;const p=demoPairs[pairIndex];const nodes=forge.querySelectorAll(".node");nodes.forEach(n=>{n.animate([{opacity:1,transform:"translateX(-50%)"},{opacity:0,transform:"translateX(-50%) translateY(8px)"},{opacity:1,transform:"translateX(-50%)"}],{duration:520,easing:"cubic-bezier(.2,.8,.2,1)"})});setTimeout(()=>{$("hero-rough").textContent=p[0];$("hero-before").textContent=p[1];$("hero-strong").textContent=p[2];$("hero-after").textContent=p[3]},220)}
+if(!reduceMotion)setInterval(cycleHero,5200);
+
+$("demo-jump").addEventListener("click",()=>{$("enhance-input").value="help me with python";activateTab("enhance");$("lab").scrollIntoView({behavior:reduceMotion?"auto":"smooth"});setTimeout(()=>$("enhance-btn").click(),reduceMotion?0:550)});
+
+document.querySelectorAll(".tab").forEach(tab=>tab.addEventListener("click",()=>activateTab(tab.dataset.tab)));
+function activateTab(name){document.querySelectorAll(".tab").forEach(tab=>{const active=tab.dataset.tab===name;tab.classList.toggle("active",active);tab.setAttribute("aria-selected",String(active))});document.querySelectorAll(".panel").forEach(panel=>{const active=panel.id===`${name}-panel`;panel.hidden=!active;panel.classList.toggle("active",active)})}
+
+$("score-input").addEventListener("input",e=>{$("score-count").textContent=`${words(e.target.value)} words`});
+$("score-btn").addEventListener("click",()=>{const text=$("score-input").value.trim();if(!text){$("score-input").focus();return}renderScore(scorePrompt(text))});
+function renderScore(result){const box=$("score-results");box.hidden=false;const circumference=339.292;const ring=$("score-ring");ring.style.strokeDashoffset=circumference;requestAnimationFrame(()=>ring.style.strokeDashoffset=String(circumference-(circumference*result.total/100)));countUp($("score-number"),result.total);const g=grade(result.total);$("score-grade").textContent=g;$("score-note").textContent={excellent:"Ready to use",good:"Strong foundation",okay:"Needs another pass",weak:"Rebuild the missing pieces"}[g];const bars=$("score-bars");bars.innerHTML="";checks.forEach((name,i)=>{const row=document.createElement("div");row.className="bar-row";row.innerHTML=`<span>${name}</span><div class="bar-track"><div class="bar-fill"></div></div><span>${result.breakdown[name]}/20</span>`;bars.appendChild(row);setTimeout(()=>row.querySelector(".bar-fill").style.width=`${result.breakdown[name]*5}%`,60+i*80)});const list=$("score-feedback");list.innerHTML="";(result.feedback.length?result.feedback:["All five checks passed."]).forEach(note=>{const li=document.createElement("li");li.textContent=note;list.appendChild(li)})}
+
+$("enhance-btn").addEventListener("click",()=>{const raw=$("enhance-input").value.trim();if(!raw){$("enhance-input").focus();return}const result=enhance(raw);$("enhance-results").hidden=false;$("intent-chip").textContent=result.intent;$("intent-confidence").textContent=`${Math.round(result.confidence*100)}% confidence`;countUp($("before-score"),result.before);countUp($("after-score"),result.after);$("gain-label").textContent=`+${result.gain} points`;$("enhance-output").textContent=result.prompt});
+$("copy-btn").addEventListener("click",()=>copyText($("enhance-output").textContent,$("copy-btn"),$("copy-status")));
+
+$("compare-btn").addEventListener("click",()=>{const a=$("compare-a").value.trim(),b=$("compare-b").value.trim();if(!a||!b){(!a?$("compare-a"):$("compare-b")).focus();return}const result=comparePrompts(a,b);$("compare-results").hidden=false;countUp($("a-score"),result.a.score);countUp($("b-score"),result.b.score);setTimeout(()=>{$("a-fill").style.width=`${result.a.score}%`;$("b-fill").style.width=`${result.b.score}%`},30);$("verdict").textContent=result.winner==="tie"?"Dead heat — same score.":`Prompt ${result.winner.toUpperCase()} wins by ${result.margin} points.`;const deltas=$("deltas");deltas.innerHTML="";checks.forEach(name=>{const d=result.deltas[name];const item=document.createElement("span");item.className="delta";item.textContent=`${name} ${d>0?"+":""}${d}`;deltas.appendChild(item)});const feedback=$("compare-feedback");feedback.innerHTML="";const loser=result.winner==="a"?result.b:result.a;const notes=result.winner==="tie"?[...new Set([...result.a.feedback,...result.b.feedback])]:loser.feedback;(notes.length?notes:["Both prompts pass every check."]).slice(0,4).forEach(note=>{const li=document.createElement("li");li.textContent=note;feedback.appendChild(li)})});
+
+let classifierTimer;$("classifier-input").addEventListener("input",e=>{clearTimeout(classifierTimer);classifierTimer=setTimeout(()=>renderIntents(e.target.value),90)});
+function renderIntents(text){const box=$("intent-bars");if(text.trim().length<3){box.innerHTML='<p class="hint">Predictions appear after three characters.</p>';return}const top=getClassifier().topK(text,3);box.innerHTML="";top.forEach(item=>{const row=document.createElement("div");row.className="ibar-row";row.innerHTML=`<span>${item.intent}</span><div class="ibar-track"><div class="ibar-fill"></div></div><span>${Math.round(item.confidence*100)}%</span>`;box.appendChild(row);requestAnimationFrame(()=>row.querySelector(".ibar-fill").style.width=`${item.confidence*100}%`)})}
+
+$("install-copy").addEventListener("click",()=>copyText($("install-command").textContent,$("install-copy")));
+</script>
+</body>
+</html>

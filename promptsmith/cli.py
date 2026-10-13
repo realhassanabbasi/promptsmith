@@ -6,6 +6,7 @@ import sys
 
 from . import __version__, enhance
 from .classifier import predict_intent
+from .compare import compare_prompts
 from .scorer import grade, score_prompt
 from .skills import SKILL_NAME, render_skill, write_skill
 from .templates import TEMPLATES, names, placeholders, render
@@ -137,6 +138,59 @@ def cmd_batch(args):
     print()
 
 
+def _read_prompt_file(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError as e:
+        print(f"Error: can't read {path}: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_compare(args):
+    """Score two prompt files against each other, check by check."""
+    a = _read_prompt_file(args.file_a)
+    b = _read_prompt_file(args.file_b)
+    if not a or not b:
+        print("Both files need at least one prompt in them.", file=sys.stderr)
+        sys.exit(1)
+    result = compare_prompts(a, b)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+
+    ra, rb = result["a"], result["b"]
+    print(f"\n{bold('Compare:')} {args.file_a}  vs  {args.file_b}\n")
+    for name, text, side in (("A", a, ra), ("B", b, rb)):
+        short = text[:54] + ("…" if len(text) > 54 else "")
+        print(f"  {name}: {side['score']:>3}/100 ({side['grade']:9})  \"{short}\"")
+    if result["winner"] == "tie":
+        print(f"\n{bold('Verdict:')} dead heat — same score.")
+    else:
+        print(f"\n{bold('Verdict:')} {green(result['winner'].upper())} wins "
+              f"by {result['margin']} points.")
+
+    print(f"\n  {'check':12} {'A':>4} {'B':>4} {'delta':>6}")
+    for check, delta in result["deltas"].items():
+        print(f"  {check:12} {ra['breakdown'][check]:>4} "
+              f"{rb['breakdown'][check]:>4} {delta:>+5}")
+
+    losers = {"a": ("B", rb), "b": ("A", ra)}
+    if result["winner"] in losers:
+        name, side = losers[result["winner"]]
+        if side["feedback"]:
+            print(f"\n{bold(f'Fix {name} first:')}")
+            for f in side["feedback"]:
+                print(f"  • {f}")
+    else:
+        for name, side in (("A", ra), ("B", rb)):
+            if side["feedback"]:
+                print(f"\n{bold(f'{name} could still fix:')}")
+                for f in side["feedback"]:
+                    print(f"  • {f}")
+    print()
+
+
 def cmd_templates(args):
     if args.show:
         print(f"\n{bold(args.show)} — {TEMPLATES[args.show]['about']}")
@@ -216,6 +270,13 @@ def build_parser():
     k.add_argument("--out", metavar="DIR",
                    help="Write DIR/promptsmith/SKILL.md instead of printing")
     k.set_defaults(func=cmd_skill)
+
+    c = sub.add_parser("compare", help="Compare two prompt files head-to-head")
+    c.add_argument("file_a", help="File holding prompt A (whole file = one prompt)")
+    c.add_argument("file_b", help="File holding prompt B (whole file = one prompt)")
+    c.add_argument("--json", action="store_true",
+                   help="Print the comparison as machine-readable JSON")
+    c.set_defaults(func=cmd_compare)
     return p
 
 

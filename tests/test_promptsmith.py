@@ -8,6 +8,7 @@ import tempfile
 import unittest
 
 from promptsmith.classifier import load_default
+from promptsmith.compare import compare_prompts
 from promptsmith.enhancer import enhance, ROLES
 from promptsmith.scorer import grade, score_prompt
 from promptsmith.skills import render_skill, write_skill
@@ -274,6 +275,89 @@ class TestSkill(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()) as out:
             main(["skill"])
         self.assertTrue(out.getvalue().startswith("---\nname: promptsmith"))
+
+
+class TestCompare(unittest.TestCase):
+    WEAK = "help me with python"
+    STRONG = ("Write a cover letter for a data science internship. "
+              "Keep it under 250 words in 3 short paragraphs. "
+              "Tone: confident but humble. Do not use buzzwords.")
+
+    def test_totals_match_scorer(self):
+        r = compare_prompts(self.WEAK, self.STRONG)
+        ta, _, _ = score_prompt(self.WEAK)
+        tb, _, _ = score_prompt(self.STRONG)
+        self.assertEqual(r["a"]["score"], ta)
+        self.assertEqual(r["b"]["score"], tb)
+
+    def test_deltas_are_b_minus_a(self):
+        r = compare_prompts(self.WEAK, self.STRONG)
+        for check, delta in r["deltas"].items():
+            self.assertEqual(delta, r["b"]["breakdown"][check] -
+                             r["a"]["breakdown"][check])
+
+    def test_winner_and_margin(self):
+        r = compare_prompts(self.WEAK, self.STRONG)
+        self.assertEqual(r["winner"], "b")
+        self.assertEqual(r["margin"], r["b"]["score"] - r["a"]["score"])
+
+        r2 = compare_prompts(self.STRONG, self.WEAK)
+        self.assertEqual(r2["winner"], "a")
+        self.assertEqual(r2["margin"], r2["a"]["score"] - r2["b"]["score"])
+
+    def test_tie(self):
+        r = compare_prompts(self.WEAK, self.WEAK)
+        self.assertEqual(r["winner"], "tie")
+        self.assertEqual(r["margin"], 0)
+        self.assertTrue(all(d == 0 for d in r["deltas"].values()))
+
+    def _run(self, argv):
+        from promptsmith.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(argv)
+        return buf.getvalue()
+
+    def test_cli_json_schema(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
+            f.write(self.WEAK)
+            fa = f.name
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
+            f.write(self.STRONG)
+            fb = f.name
+        try:
+            out = self._run(["compare", fa, fb, "--json"])
+            data = json.loads(out)
+            self.assertEqual(set(data),
+                             {"a", "b", "deltas", "winner", "margin"})
+            self.assertEqual(data["winner"], "b")
+            self.assertEqual(data["margin"],
+                             data["b"]["score"] - data["a"]["score"])
+        finally:
+            os.unlink(fa)
+            os.unlink(fb)
+
+    def test_cli_text_output(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
+            f.write(self.WEAK)
+            fa = f.name
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
+            f.write(self.STRONG)
+            fb = f.name
+        try:
+            out = self._run(["compare", fa, fb])
+            self.assertIn("B wins", out)
+            self.assertIn("check", out)
+            self.assertIn("Fix A first:", out)
+        finally:
+            os.unlink(fa)
+            os.unlink(fb)
+
+    def test_cli_missing_file(self):
+        from promptsmith.cli import main
+        with self.assertRaises(SystemExit) as ctx:
+            main(["compare", "/nope/missing_a.txt", "/nope/missing_b.txt"])
+        self.assertEqual(ctx.exception.code, 1)
 
 
 if __name__ == "__main__":

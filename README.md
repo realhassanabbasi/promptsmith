@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Deps](https://img.shields.io/badge/dependencies-zero-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-19%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-40%20passing-brightgreen?style=flat-square)
 
 **Turn rough prompts into engineered ones.** Paste in *"help me with python"*, get back a structured prompt with a role, context slots, requirements, output format, and guardrails — scored before and after. Works **offline**, with **zero dependencies**.
 
@@ -16,6 +16,7 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 - **`enhance`** — rewrite any rough prompt into a structured, engineered one (+40–55 points on average)
 - **`score`** — grade a prompt 0–100 on 5 checks, with concrete fix-it feedback (`--json` for scripts)
 - **`batch`** — score every prompt in a file (one per line): averages, weakest prompt, optional `--enhance` that writes `FILE.enhanced.md`
+- **`compare`** — put two prompt versions head-to-head: scores, per-check deltas, a winner verdict, and what the loser should fix first (`--json` for scripts)
 - **`templates`** — 8 fill-in-the-blank templates (debug code, explain concepts, learn vocabulary, study plans…)
 - **`interactive`** — guided Q&A that builds your prompt with you
 - **`skill`** — generate an installable agent skill (SKILL.md) from the real scoring rubric, so coding agents apply the same 5 checks themselves
@@ -41,6 +42,9 @@ promptsmith batch my_prompts.txt --enhance   # also enhances each, saves my_prom
 # machine-readable output for scripts and pipelines
 promptsmith score "help me with python" --json
 promptsmith enhance "help me with python" --json
+
+# compare two versions of a prompt (whole file = one prompt)
+promptsmith compare prompt_v1.txt prompt_v2.txt
 
 # guided mode
 promptsmith interactive
@@ -85,6 +89,38 @@ Weakest: "help me with python" (37/100)
 `--enhance` also rewrites every prompt, reports the average gain, and saves all
 enhanced prompts to `my_prompts.txt.enhanced.md`. `--json` on `score`, `enhance`
 or `batch` prints machine-readable JSON for scripts and pipelines.
+
+## Compare mode
+
+Real output — two prompt versions, one question ("did my rewrite help?"):
+
+```
+$ promptsmith compare prompt_v1.txt prompt_v2.txt
+
+Compare: prompt_v1.txt  vs  prompt_v2.txt
+
+  A:  37/100 (weak     )  "help me with python"
+  B:  94/100 (excellent)  "Write a guide to learning python for beginners.
+Give m…"
+
+Verdict: B wins by 57 points.
+
+  check           A    B  delta
+  clarity        20   20    +0
+  context         3   14   +11
+  specificity     5   20   +15
+  format          4   20   +16
+  guardrails      5   20   +15
+
+Fix A first:
+  • Too short to carry context. Add 2-3 sentences of background.
+  • Be specific: names, numbers, versions, examples of what 'good' looks like.
+  • Say what the answer should look like: bullets, table, code, steps…
+  • Add one guardrail: tone, length limit, or 'say when unsure'.
+```
+
+`--json` gives the same comparison as machine-readable JSON
+(`a`, `b`, `deltas`, `winner`, `margin`) for scripts and pipelines.
 
 ## Agent skill export
 
@@ -166,8 +202,8 @@ More pairs in [`examples/before_after.md`](examples/before_after.md).
 ```
                         +------------------+
                         |      cli.py      |  argparse: score / enhance / batch /
-                        +--------+---------+           templates / interactive
-                                 |
+                        +--------+---------+    templates / interactive /
+                                 |                skill / compare
             +--------------------+--------------------+
             |                    |                    |
      +------v------+      +------v------+      +------v------+
@@ -178,7 +214,7 @@ More pairs in [`examples/before_after.md`](examples/before_after.md).
             |                    |             | guardrails  |
    training_prompts.json         |             +------+------+
    (94 labeled prompts,          +----> before/after scores -+
-    8 intents)                                  (self-check)
+    8 intents)              compare reuses the scorer for A vs B
 ```
 
 Design decisions, stated plainly:
@@ -210,8 +246,9 @@ promptsmith/
 ├── promptsmith/
 │   ├── __init__.py        # public API
 │   ├── __main__.py        # `python -m promptsmith`
-│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill)
+│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare)
 │   ├── classifier.py      # Naive Bayes intent classifier, from scratch (+0.35 fallback)
+│   ├── compare.py         # `promptsmith compare` — head-to-head, per-check deltas
 │   ├── enhancer.py        # enhancement pipeline (role → structure → guardrails)
 │   ├── scorer.py          # 5-check rubric, 0-100
 │   ├── skills.py          # `promptsmith skill` — renders an installable agent skill
@@ -219,7 +256,7 @@ promptsmith/
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 33 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill)
+│   └── test_promptsmith.py  # 40 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

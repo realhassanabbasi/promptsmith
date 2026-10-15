@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Deps](https://img.shields.io/badge/dependencies-zero-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-40%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-52%20passing-brightgreen?style=flat-square)
 [![Live demo](https://img.shields.io/badge/demo-live%20in%20browser-black?style=flat-square)](https://realhassanabbasi.github.io/promptsmith/)
 
 **Turn rough prompts into engineered ones.** Paste in *"help me with python"*, get back a structured prompt with a role, context slots, requirements, output format, and guardrails — scored before and after. Works **offline**, with **zero dependencies**.
@@ -22,6 +22,7 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 - **`score`** — grade a prompt 0–100 on 5 checks, with concrete fix-it feedback (`--json` for scripts)
 - **`batch`** — score every prompt in a file (one per line): averages, weakest prompt, optional `--enhance` that writes `FILE.enhanced.md`
 - **`compare`** — put two prompt versions head-to-head: scores, per-check deltas, a winner verdict, and what the loser should fix first (`--json` for scripts)
+- **`history`** — log scored runs (`score`/`compare --log`) and print per-prompt trend reports (`report`): runs, averages, sparklines, and an improving/steady/slipping verdict (`--json` for dashboards)
 - **`templates`** — 8 fill-in-the-blank templates (debug code, explain concepts, learn vocabulary, study plans…)
 - **`interactive`** — guided Q&A that builds your prompt with you
 - **`skill`** — generate an installable agent skill (SKILL.md) from the real scoring rubric, so coding agents apply the same 5 checks themselves
@@ -50,6 +51,10 @@ promptsmith enhance "help me with python" --json
 
 # compare two versions of a prompt (whole file = one prompt)
 promptsmith compare prompt_v1.txt prompt_v2.txt
+
+# track scores over time, then see the trend
+promptsmith score "help me with python" --log
+promptsmith report
 
 # guided mode
 promptsmith interactive
@@ -126,6 +131,42 @@ Fix A first:
 
 `--json` gives the same comparison as machine-readable JSON
 (`a`, `b`, `deltas`, `winner`, `margin`) for scripts and pipelines.
+
+## Score history
+
+Real output — log runs with `--log`, then watch trends with `report`:
+
+```
+$ promptsmith score "help me with python" --log
+
+Prompt score: 37/100 (weak)
+
+  clarity      ██████████  20/20
+  context      █░░░░░░░░░   3/20
+  specificity  ██░░░░░░░░   5/20
+  format       ██░░░░░░░░   4/20
+  guardrails   ██░░░░░░░░   5/20
+
+How to improve:
+  • Too short to carry context. Add 2-3 sentences of background.
+  • Be specific: names, numbers, versions, examples of what 'good' looks like.
+  • Say what the answer should look like: bullets, table, code, steps…
+  • Add one guardrail: tone, length limit, or 'say when unsure'.
+
+$ promptsmith report
+
+Score history — 2 runs, 2 prompt(s) tracked
+
+  prompt                                     runs   avg best last    Δ  trend   verdict
+  help me with python                           1  37.0   37   37   +0  ▄       baseline —
+  Write a Python function that sorts a lis…     1  58.0   58   58   +0  ▄       baseline —
+```
+
+Re-score the same prompt over days and the verdict column reads
+`improving ▲`, `steady ▬`, or `slipping ▼` with a sparkline — the honest
+answer to "are my prompts getting better?" `compare --log` logs both
+versions. Records live in `.promptsmith/history.jsonl` (git-ignored), and
+`report --json` gives the same table as JSON for dashboards.
 
 ## Agent skill export
 
@@ -251,17 +292,18 @@ promptsmith/
 ├── promptsmith/
 │   ├── __init__.py        # public API
 │   ├── __main__.py        # `python -m promptsmith`
-│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare)
+│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/report)
 │   ├── classifier.py      # Naive Bayes intent classifier, from scratch (+0.35 fallback)
 │   ├── compare.py         # `promptsmith compare` — head-to-head, per-check deltas
 │   ├── enhancer.py        # enhancement pipeline (role → structure → guardrails)
+│   ├── history.py         # `score/compare --log` + `promptsmith report` — score history & trends
 │   ├── scorer.py          # 5-check rubric, 0-100
 │   ├── skills.py          # `promptsmith skill` — renders an installable agent skill
 │   ├── templates.py       # 8 ready-made templates
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 40 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare)
+│   └── test_promptsmith.py  # 52 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, history)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

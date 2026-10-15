@@ -7,6 +7,7 @@ import sys
 from . import __version__, enhance
 from .classifier import predict_intent
 from .compare import compare_prompts
+from .history import load_history, log_score, trend, verdict
 from .scorer import grade, score_prompt
 from .skills import SKILL_NAME, render_skill, write_skill
 from .templates import TEMPLATES, names, placeholders, render
@@ -36,10 +37,15 @@ def _score_payload(prompt):
 
 
 def cmd_score(args):
+    payload = _score_payload(args.prompt)
+    if args.log:
+        log_score(payload["prompt"], payload["score"],
+                  payload["grade"], payload["breakdown"])
     if args.json:
-        print(json.dumps(_score_payload(args.prompt), indent=2))
+        print(json.dumps(payload, indent=2))
         return
-    total, breakdown, feedback = score_prompt(args.prompt)
+    total, breakdown, feedback = (payload["score"], payload["breakdown"],
+                                  payload["feedback"])
     print(f"\n{bold('Prompt score:')} {total}/100 ({grade(total)})\n")
     for k, v in breakdown.items():
         bar = "█" * (v // 2) + "░" * (10 - v // 2)
@@ -155,6 +161,11 @@ def cmd_compare(args):
         print("Both files need at least one prompt in them.", file=sys.stderr)
         sys.exit(1)
     result = compare_prompts(a, b)
+    if args.log:
+        log_score(a, result["a"]["score"], result["a"]["grade"],
+                  result["a"]["breakdown"])
+        log_score(b, result["b"]["score"], result["b"]["grade"],
+                  result["b"]["breakdown"])
     if args.json:
         print(json.dumps(result, indent=2))
         return
@@ -188,6 +199,32 @@ def cmd_compare(args):
                 print(f"\n{bold(f'{name} could still fix:')}")
                 for f in side["feedback"]:
                     print(f"  • {f}")
+    print()
+
+
+def cmd_report(args):
+    records = load_history()
+    if not records:
+        print("No score history yet — run `promptsmith score \"...\" --log` "
+              "to start tracking.")
+        return
+    rows = trend(records)
+    if args.json:
+        print(json.dumps(rows, indent=2))
+        return
+
+    arrows = {"improving": "▲", "slipping": "▼",
+              "steady": "▬", "baseline": "—"}
+    print(f"\n{bold('Score history')} — {len(records)} runs, "
+          f"{len(rows)} prompt(s) tracked\n")
+    print(f"  {'prompt':42} {'runs':>4} {'avg':>5} {'best':>4} "
+          f"{'last':>4} {'Δ':>4}  {'trend':6}  verdict")
+    for r in rows:
+        short = r["prompt"][:40] + ("…" if len(r["prompt"]) > 40 else "")
+        v = verdict(r)
+        print(f"  {short:42} {r['runs']:>4} {r['average']:>5.1f} "
+              f"{r['best']:>4} {r['last']:>4} {r['delta']:>+4}  "
+              f"{r['spark']:6}  {v} {arrows[v]}")
     print()
 
 
@@ -242,6 +279,8 @@ def build_parser():
     s.add_argument("prompt", help="The prompt text in quotes")
     s.add_argument("--json", action="store_true",
                    help="Print the score as machine-readable JSON")
+    s.add_argument("--log", action="store_true",
+                   help="Append this run to .promptsmith/history.jsonl")
     s.set_defaults(func=cmd_score)
 
     e = sub.add_parser("enhance", help="Rewrite a rough prompt into an engineered one")
@@ -276,7 +315,14 @@ def build_parser():
     c.add_argument("file_b", help="File holding prompt B (whole file = one prompt)")
     c.add_argument("--json", action="store_true",
                    help="Print the comparison as machine-readable JSON")
+    c.add_argument("--log", action="store_true",
+                   help="Append both runs to .promptsmith/history.jsonl")
     c.set_defaults(func=cmd_compare)
+
+    r = sub.add_parser("report", help="Show score history trends per prompt")
+    r.add_argument("--json", action="store_true",
+                   help="Print the trend table as machine-readable JSON")
+    r.set_defaults(func=cmd_report)
     return p
 
 

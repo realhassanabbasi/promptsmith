@@ -360,5 +360,163 @@ class TestCompare(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 1)
 
 
+class TestHistory(unittest.TestCase):
+    def _tmp_cwd(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        prev = os.getcwd()
+        os.chdir(tmp.name)
+        self.addCleanup(os.chdir, prev)
+
+    def _history_file(self):
+        return os.path.join(".promptsmith", "history.jsonl")
+
+    def test_log_writes_jsonl(self):
+        from promptsmith.history import log_score
+        self._tmp_cwd()
+        rec = log_score("help me with python", 37, "weak", {"clarity": 4})
+        self.assertTrue(os.path.isfile(self._history_file()))
+        self.assertEqual(rec["score"], 37)
+        self.assertEqual(rec["prompt"], "help me with python")
+        self.assertEqual(rec["grade"], "weak")
+        self.assertIn("ts", rec)
+
+    def test_load_roundtrip_keeps_order(self):
+        from promptsmith.history import log_score, load_history
+        self._tmp_cwd()
+        log_score("p1", 30)
+        log_score("p1", 50)
+        log_score("p2", 80)
+        recs = load_history()
+        self.assertEqual([r["score"] for r in recs], [30, 50, 80])
+
+    def test_load_missing_file_returns_empty(self):
+        from promptsmith.history import load_history
+        self._tmp_cwd()
+        self.assertEqual(load_history(), [])
+
+    def test_corrupt_lines_are_skipped(self):
+        from promptsmith.history import log_score, load_history
+        self._tmp_cwd()
+        log_score("ok", 40)
+        with open(self._history_file(), "a", encoding="utf-8") as f:
+            f.write("this is not json\n")
+        self.assertEqual(len(load_history()), 1)
+
+    def test_trend_math(self):
+        from promptsmith.history import log_score, load_history, trend
+        self._tmp_cwd()
+        log_score("p1", 30)
+        log_score("p1", 50)
+        log_score("p2", 90)
+        rows = {r["prompt"]: r for r in trend(load_history())}
+        self.assertEqual(rows["p1"]["runs"], 2)
+        self.assertEqual(rows["p1"]["average"], 40.0)
+        self.assertEqual(rows["p1"]["best"], 50)
+        self.assertEqual(rows["p1"]["last"], 50)
+        self.assertEqual(rows["p1"]["delta"], 20)
+        self.assertEqual(rows["p2"]["runs"], 1)
+        self.assertEqual(rows["p2"]["delta"], 0)
+
+    def test_sparkline_shapes(self):
+        from promptsmith.history import sparkline
+        up = sparkline([10, 30, 60, 90])
+        self.assertEqual(len(up), 4)
+        self.assertLess(up[0], up[-1])  # block codepoints rise with score
+        flat = sparkline([50, 50, 50])
+        self.assertEqual(len(set(flat)), 1)
+        self.assertEqual(sparkline([]), "")
+
+    def test_score_log_flag_writes_file(self):
+        from promptsmith.cli import main
+        from promptsmith.history import load_history
+        self._tmp_cwd()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(["score", "help me with python", "--log"])
+        recs = load_history()
+        self.assertEqual(len(recs), 1)
+        self.assertEqual(recs[0]["prompt"], "help me with python")
+
+    def test_score_log_flag_works_with_json(self):
+        from promptsmith.cli import main
+        from promptsmith.history import load_history
+        self._tmp_cwd()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(["score", "help me with python", "--json", "--log"])
+        data = json.loads(buf.getvalue())  # output still pure JSON
+        self.assertEqual(len(load_history()), 1)
+        self.assertEqual(load_history()[0]["score"], data["score"])
+
+    def test_compare_log_writes_both_runs(self):
+        from promptsmith.cli import main
+        from promptsmith.history import load_history
+        self._tmp_cwd()
+        with tempfile.NamedTemporaryFile("w", suffix=".txt",
+                                         delete=False) as f:
+            f.write("help me with python")
+            fa = f.name
+        with tempfile.NamedTemporaryFile("w", suffix=".txt",
+                                         delete=False) as f:
+            f.write("Write a cover letter for a data science internship. "
+                    "Keep it under 250 words. Tone: confident.")
+            fb = f.name
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                main(["compare", fa, fb, "--log"])
+            recs = load_history()
+            self.assertEqual(len(recs), 2)
+            self.assertLess(recs[0]["score"], recs[1]["score"])
+        finally:
+            os.unlink(fa)
+            os.unlink(fb)
+
+    def test_report_empty_history_message(self):
+        from promptsmith.cli import main
+        self._tmp_cwd()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(["report"])
+        self.assertIn("No score history yet", buf.getvalue())
+
+    def test_report_shows_trends_and_verdicts(self):
+        from promptsmith.cli import main
+        from promptsmith.history import log_score
+        self._tmp_cwd()
+        log_score("up", 30)
+        log_score("up", 70)
+        log_score("down", 80)
+        log_score("down", 40)
+        log_score("flat", 50)
+        log_score("flat", 50)
+        log_score("new", 60)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(["report"])
+        out = buf.getvalue()
+        for word in ("improving", "slipping", "steady", "baseline"):
+            self.assertIn(word, out)
+        self.assertIn("▁", out)  # sparkline glyphs render
+
+    def test_report_json_schema(self):
+        from promptsmith.cli import main
+        from promptsmith.history import log_score
+        self._tmp_cwd()
+        log_score("iter prompt", 30)
+        log_score("iter prompt", 70)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(["report", "--json"])
+        data = json.loads(buf.getvalue())
+        self.assertEqual(len(data), 1)
+        row = data[0]
+        self.assertEqual(set(row), {"prompt", "runs", "average", "best",
+                                   "last", "delta", "spark"})
+        self.assertEqual(row["runs"], 2)
+        self.assertEqual(row["delta"], 40)
+        self.assertEqual(row["average"], 50.0)
+
+
 if __name__ == "__main__":
     unittest.main()

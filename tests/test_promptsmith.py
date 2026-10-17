@@ -518,5 +518,204 @@ class TestHistory(unittest.TestCase):
         self.assertEqual(row["average"], 50.0)
 
 
+
+class TestImprove(unittest.TestCase):
+    WEAK = "help me with python"
+
+    def test_before_after_and_margin(self):
+        from promptsmith.improve import improve_prompt
+        r = improve_prompt(self.WEAK)
+        self.assertIn("intent", r)
+        self.assertTrue(r["enhanced"])
+        self.assertEqual(r["margin"],
+                         r["after"]["score"] - r["before"]["score"])
+        self.assertGreaterEqual(r["after"]["score"], r["before"]["score"])
+
+    def test_deltas_match_compare(self):
+        from promptsmith.improve import improve_prompt
+        r = improve_prompt(self.WEAK)
+        cmp = compare_prompts(self.WEAK, r["enhanced"])
+        self.assertEqual(r["deltas"], cmp["deltas"])
+        self.assertEqual(r["before"]["score"], cmp["a"]["score"])
+        self.assertEqual(r["after"]["score"], cmp["b"]["score"])
+
+    def test_confidence_rounded(self):
+        from promptsmith.improve import improve_prompt
+        r = improve_prompt(self.WEAK)
+        self.assertLessEqual(r["confidence"], 1.0)
+        self.assertEqual(r["confidence"], round(r["confidence"], 3))
+
+    def test_what_improved_sorts_best_first(self):
+        from promptsmith.improve import what_improved
+        deltas = {"clarity": 8, "context": 0, "specificity": -2,
+                  "format": 16, "guardrails": 5}
+        self.assertEqual(what_improved(deltas, top=2),
+                         [("format", 16), ("clarity", 8)])
+
+    def _run(self, argv):
+        from promptsmith.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(argv)
+        return buf.getvalue()
+
+    def test_cli_text_shows_gain_table(self):
+        out = self._run(["improve", self.WEAK])
+        self.assertIn("Detected intent:", out)
+        self.assertIn("Score:", out)
+        self.assertIn("What improved:", out)
+        self.assertIn("Improved prompt", out)
+
+    def test_cli_json_schema(self):
+        out = self._run(["improve", self.WEAK, "--json"])
+        data = json.loads(out)
+        self.assertEqual(set(data),
+                         {"prompt", "intent", "confidence", "before",
+                          "after", "deltas", "margin", "enhanced"})
+        self.assertEqual(data["margin"],
+                         data["after"]["score"] - data["before"]["score"])
+
+    def test_cli_save_writes_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "out.md")
+            out = self._run(["improve", self.WEAK, "--save", path])
+            self.assertTrue(os.path.isfile(path))
+            with open(path, encoding="utf-8") as f:
+                self.assertIn("Task:", f.read())
+            self.assertIn("Saved to", out)
+
+    def test_cli_log_writes_both_runs(self):
+        from promptsmith.history import load_history
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        prev = os.getcwd()
+        os.chdir(tmp.name)
+        self.addCleanup(os.chdir, prev)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            from promptsmith.cli import main
+            main(["improve", self.WEAK, "--log"])
+        recs = load_history()
+        self.assertEqual(len(recs), 2)
+        self.assertEqual(recs[0]["prompt"], self.WEAK)
+        self.assertNotEqual(recs[0]["prompt"], recs[1]["prompt"])
+
+
+class TestLibrary(unittest.TestCase):
+    WEAK = "help me with python"
+
+    def _tmp_cwd(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        prev = os.getcwd()
+        os.chdir(tmp.name)
+        self.addCleanup(os.chdir, prev)
+
+    def _run(self, argv):
+        from promptsmith.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(argv)
+        return buf.getvalue()
+
+    def test_save_writes_jsonl_with_version_one(self):
+        from promptsmith.library import save_entry
+        self._tmp_cwd()
+        rec = save_entry("py-help", self.WEAK)
+        self.assertTrue(os.path.isfile(".promptsmith/library.jsonl"))
+        self.assertEqual(rec["version"], 1)
+        self.assertEqual(rec["name"], "py-help")
+        self.assertEqual(rec["score"], rec["score"])
+        self.assertIsNone(rec["enhanced"])
+        self.assertIn("ts", rec)
+
+    def test_re_save_increments_version(self):
+        from promptsmith.library import save_entry, entries_for
+        self._tmp_cwd()
+        save_entry("py-help", self.WEAK)
+        rec2 = save_entry("py-help", "help me with python 3")
+        self.assertEqual(rec2["version"], 2)
+        self.assertEqual(len(entries_for("py-help")), 2)
+
+    def test_save_improve_records_enhanced_and_before(self):
+        from promptsmith.library import save_entry
+        self._tmp_cwd()
+        rec = save_entry("py-help", self.WEAK, enhance_it=True)
+        self.assertTrue(rec["enhanced"])
+        self.assertIsNotNone(rec["before_score"])
+        self.assertGreaterEqual(rec["score"], rec["before_score"])
+
+    def test_tags_roundtrip(self):
+        from promptsmith.library import save_entry, load_library
+        self._tmp_cwd()
+        save_entry("py-help", self.WEAK, tags=["coding", "debug", "  "])
+        recs = load_library()
+        self.assertEqual(recs[0]["tags"], ["coding", "debug"])
+
+    def test_corrupt_lines_skipped(self):
+        from promptsmith.library import load_library
+        self._tmp_cwd()
+        os.makedirs(".promptsmith", exist_ok=True)
+        with open(".promptsmith/library.jsonl", "w", encoding="utf-8") as f:
+            f.write('{"name": "good", "version": 1, "score": 80}\n')
+            f.write("not json at all\n")
+            f.write('{"name": "good", "version": 2, "score": 90}\n')
+        recs = load_library()
+        self.assertEqual(len(recs), 2)
+        self.assertEqual([r["score"] for r in recs], [80, 90])
+
+    def test_summarize_math(self):
+        from promptsmith.library import save_entry, summarize
+        self._tmp_cwd()
+        save_entry("a", self.WEAK)
+        save_entry("a", "write a python function that sorts a list")
+        rows = summarize()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["versions"], 2)
+        self.assertEqual(rows[0]["best"], max(rows[0]["last"], rows[0]["best"]))
+        self.assertIn("delta", rows[0])
+        self.assertIn("tags", rows[0])
+
+    def test_cli_save_prints_version(self):
+        self._tmp_cwd()
+        out = self._run(["save", "py-help", self.WEAK, "--tags", "coding"])
+        self.assertIn("Saved:", out)
+        self.assertIn("py-help", out)
+        self.assertIn("v1", out)
+        self.assertTrue(os.path.isfile(".promptsmith/library.jsonl"))
+
+    def test_cli_library_list_and_history(self):
+        self._tmp_cwd()
+        self._run(["save", "py-help", self.WEAK])
+        self._run(["save", "py-help", "write a python function that sorts a list"])
+        out = self._run(["library"])
+        self.assertIn("Prompt library", out)
+        self.assertIn("py-help", out)
+        out2 = self._run(["library", "py-help"])
+        self.assertIn("version(s)", out2)
+        self.assertIn("v1", out2)
+        self.assertIn("v2", out2)
+
+    def test_cli_library_json_schema(self):
+        self._tmp_cwd()
+        self._run(["save", "py-help", self.WEAK, "--tags", "coding"])
+        data = json.loads(self._run(["library", "--json"]))
+        self.assertEqual(len(data), 1)
+        self.assertEqual(set(data[0]),
+                         {"name", "versions", "last", "best",
+                          "delta", "tags", "saved"})
+        data2 = json.loads(self._run(["library", "py-help", "--json"]))
+        self.assertEqual(data2[0]["name"], "py-help")
+        self.assertEqual(data2[0]["version"], 1)
+
+    def test_cli_library_empty_and_unknown_name(self):
+        self._tmp_cwd()
+        out = self._run(["library"])
+        self.assertIn("Library is empty", out)
+        self._run(["save", "py-help", self.WEAK])
+        out2 = self._run(["library", "nope"])
+        self.assertIn('No saved prompt named "nope"', out2)
+
+
 if __name__ == "__main__":
     unittest.main()

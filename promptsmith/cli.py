@@ -13,6 +13,7 @@ from .library import entries_for, library_path, load_library, save_entry, summar
 from .scorer import grade, score_prompt
 from .skills import SKILL_NAME, render_skill, write_skill
 from .templates import TEMPLATES, names, placeholders, render
+from .tokens import estimate_tokens, token_report
 
 # tiny color helpers, no dependencies needed
 def _c(code, text):
@@ -385,6 +386,21 @@ def cmd_interactive(_args):
     print()
 
 
+def cmd_tokens(args):
+    report = token_report(args.prompt, args.model)
+    if args.json:
+        print(json.dumps(report, indent=2))
+        return
+    share_pct = report["context_share"] * 100
+    print(f"\n{bold('Tokens:')} ~{report['tokens']} "
+          f"({report['words']} words, {report['characters']} chars)\n")
+    print(f"  Model: {report['model']} "
+          f"(window {report['context_window']:,} tokens)")
+    print(f"  Context used: {share_pct:.2f}%\n")
+    print(f"  {yellow('Note:')} heuristic estimate (~4 chars/token).")
+    print(f"  Use a real tokenizer for exact counts.\n")
+
+
 def build_parser():
     p = argparse.ArgumentParser(
         prog="promptsmith",
@@ -469,6 +485,14 @@ def build_parser():
     lb.add_argument("--json", action="store_true",
                     help="Print as machine-readable JSON")
     lb.set_defaults(func=cmd_library)
+
+    tk = sub.add_parser("tokens", help="Estimate token count and context usage")
+    tk.add_argument("prompt", help="The prompt to measure")
+    tk.add_argument("--model", default="gpt-4o",
+                    help="Model for context-window share (default: gpt-4o)")
+    tk.add_argument("--json", action="store_true",
+                    help="Print as machine-readable JSON")
+    tk.set_defaults(func=cmd_tokens)
     return p
 
 

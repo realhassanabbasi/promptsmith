@@ -276,6 +276,39 @@ class TestSkill(unittest.TestCase):
             main(["skill"])
         self.assertTrue(out.getvalue().startswith("---\nname: promptsmith"))
 
+    def test_skill_teaches_the_loop(self):
+        # v1.8.0: the skill must teach the full score→prove→keep loop,
+        # not just the 5-check rubric
+        md = render_skill()
+        self.assertIn("## The improvement loop", md)
+        self.assertIn("Prove it got better", md)
+        self.assertIn("margin", md)
+        self.assertIn("version history", md)
+        self.assertIn("score` → `improve` → `compare`", md)
+
+    def test_example_is_real_improve_output(self):
+        # the worked example must come from the real improve() pipeline,
+        # margin and per-check gains included
+        from promptsmith.improve import improve_prompt, what_improved
+        from promptsmith.skills import EXAMPLE_ROUGH
+        md = render_skill()
+        result = improve_prompt(EXAMPLE_ROUGH)
+        self.assertGreater(result["after"]["score"], result["before"]["score"])
+        self.assertIn(str(result["before"]["score"]), md)
+        self.assertIn(str(result["after"]["score"]), md)
+        self.assertIn(f"+{result['margin']}", md)
+        self.assertIn(result["enhanced"].split("\n")[0], md)
+        for check, delta in what_improved(result["deltas"], top=3):
+            self.assertIn(f"{check} +{delta}", md)
+
+    def test_frontmatter_describes_loop(self):
+        md = render_skill()
+        self.assertIn("improvement loop", md.split("---")[1])
+
+    def test_version_is_1_8_0(self):
+        import promptsmith
+        self.assertEqual(promptsmith.__version__, "1.8.0")
+
 
 class TestCompare(unittest.TestCase):
     WEAK = "help me with python"

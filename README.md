@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Deps](https://img.shields.io/badge/dependencies-zero-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-70%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-74%20passing-brightgreen?style=flat-square)
 [![Live demo](https://img.shields.io/badge/demo-live%20in%20browser-black?style=flat-square)](https://realhassanabbasi.github.io/promptsmith/)
 
 **Turn rough prompts into engineered ones.** Paste in *"help me with python"*, get back a structured prompt with a role, context slots, requirements, output format, and guardrails — scored before and after. Works **offline**, with **zero dependencies**.
@@ -27,7 +27,7 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 - **`library`** — save named prompts as versioned library entries (`save NAME "prompt"`; `--improve` saves the enhanced version too): `library` lists each name's versions/last/best, `library NAME` shows its full version history — your best-scoring prompt is always one glance away (`--tags`, `--json`)
 - **`templates`** — 8 fill-in-the-blank templates (debug code, explain concepts, learn vocabulary, study plans…)
 - **`interactive`** — guided Q&A that builds your prompt with you
-- **`skill`** — generate an installable agent skill (SKILL.md) from the real scoring rubric, so coding agents apply the same 5 checks themselves
+- **`skill`** — generate an installable agent skill (SKILL.md) from the real scoring rubric AND the full score→improve→compare→version loop, so coding agents apply the same workflow themselves
 - **From-scratch ML** — intent classifier (Multinomial Naive Bayes) trained on 94 labeled prompts across 8 intents, pure stdlib; shaky guesses fall back to a generic role instead of a confident wrong one
 - **Zero dependencies** — only the Python standard library; runs anywhere, even offline
 
@@ -278,9 +278,25 @@ promptsmith skill --out ~/.claude/skills
 
 This writes `~/.claude/skills/promptsmith/SKILL.md`: the 5-check rubric
 (clarity, context, specificity, format, guardrails — 20 points each), all 8
-intent roles with their formats, and a real worked example. The skill is
-generated from the actual code, so it always matches the current version —
-nothing to keep in sync by hand.
+intent roles with their formats, **the improvement loop** (score → rebuild →
+prove the margin → keep versions → track trends, with the CLI commands each
+step maps to), and a real worked example. The skill is generated from the
+actual code — the example is produced by a real `improve()` call at render
+time — so it always matches the current version, nothing to keep in sync by
+hand.
+
+Real `promptsmith skill` output (excerpt):
+
+```markdown
+## Worked example (real output)
+
+Rough prompt: "help me write an essay about climate change"
+
+Scored 37/100 (weak) → improved 92/100 (excellent), margin +55 points,
+intent `write` (confidence 0.69).
+
+Biggest gains: context +17, format +16, specificity +15.
+```
 
 ## Demo
 
@@ -398,12 +414,12 @@ promptsmith/
 │   ├── improve.py         # `promptsmith improve` — score, enhance, re-score in one step
 │   ├── library.py         # `promptsmith save` + `promptsmith library` — versioned prompt library
 │   ├── scorer.py          # 5-check rubric, 0-100
-│   ├── skills.py          # `promptsmith skill` — renders an installable agent skill
+│   ├── skills.py          # `promptsmith skill` — renders an installable agent skill (rubric + improvement loop)
 │   ├── templates.py       # 8 ready-made templates
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 70 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, history, improve, library)
+│   └── test_promptsmith.py  # 74 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, history, improve, library)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

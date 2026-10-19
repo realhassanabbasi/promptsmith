@@ -12,6 +12,7 @@ from .library import entries_for, load_library, save_entry, summarize
 from .scorer import grade, score_prompt
 from .skills import render_skill, write_skill
 from .templates import names, placeholders, render, TEMPLATES
+from .tokens import context_share, estimate_tokens, token_report
 
-__version__ = "1.8.0"
-__all__ = ["load_default", "predict_intent", "enhance", "improve_prompt", "what_improved", "score_prompt", "grade", "compare_prompts", "render", "names", "placeholders", "TEMPLATES", "render_skill", "write_skill", "log_score", "load_history", "trend", "sparkline", "verdict", "save_entry", "load_library", "entries_for", "summarize"]
+__version__ = "1.9.0"
+__all__ = ["load_default", "predict_intent", "enhance", "improve_prompt", "what_improved", "score_prompt", "grade", "compare_prompts", "render", "names", "placeholders", "TEMPLATES", "render_skill", "write_skill", "log_score", "load_history", "trend", "sparkline", "verdict", "save_entry", "load_library", "entries_for", "summarize", "estimate_tokens", "token_report", "context_share"]

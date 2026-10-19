@@ -25,6 +25,7 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 - **`compare`** — put two prompt versions head-to-head: scores, per-check deltas, a winner verdict, and what the loser should fix first (`--json` for scripts)
 - **`history`** — log scored runs (`score`/`compare --log`) and print per-prompt trend reports (`report`): runs, averages, sparklines, and an improving/steady/slipping verdict (`--json` for dashboards)
 - **`library`** — save named prompts as versioned library entries (`save NAME "prompt"`; `--improve` saves the enhanced version too): `library` lists each name's versions/last/best, `library NAME` shows its full version history — your best-scoring prompt is always one glance away (`--tags`, `--json`)
+- **`tokens`** — estimate token count and context-window share for any prompt: `tokens "prompt"` prints ~tokens, words, chars, and % of the model's window used (`--model` to pick the model, `--json` for scripts)
 - **`templates`** — 8 fill-in-the-blank templates (debug code, explain concepts, learn vocabulary, study plans…)
 - **`interactive`** — guided Q&A that builds your prompt with you
 - **`skill`** — generate an installable agent skill (SKILL.md) from the real scoring rubric AND the full score→improve→compare→version loop, so coding agents apply the same workflow themselves
@@ -406,7 +407,8 @@ promptsmith/
 ├── promptsmith/
 │   ├── __init__.py        # public API
 │   ├── __main__.py        # `python -m promptsmith`
-│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/report/improve/save/library)
+│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/report/improve/save/library/tokens)
+│   ├── tokens.py          # offline token estimation + context-window share
 │   ├── classifier.py      # Naive Bayes intent classifier, from scratch (+0.35 fallback)
 │   ├── compare.py         # `promptsmith compare` — head-to-head, per-check deltas
 │   ├── enhancer.py        # enhancement pipeline (role → structure → guardrails)

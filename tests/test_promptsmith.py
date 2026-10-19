@@ -305,9 +305,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_8_0(self):
+    def test_version_is_1_9_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.8.0")
+        self.assertEqual(promptsmith.__version__, "1.9.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -748,6 +748,46 @@ class TestLibrary(unittest.TestCase):
         self._run(["save", "py-help", self.WEAK])
         out2 = self._run(["library", "nope"])
         self.assertIn('No saved prompt named "nope"', out2)
+
+
+class TestTokens(unittest.TestCase):
+    def test_estimate_empty(self):
+        from promptsmith.tokens import estimate_tokens
+        self.assertEqual(estimate_tokens(""), 0)
+        self.assertEqual(estimate_tokens("   "), 0)
+
+    def test_estimate_basic(self):
+        from promptsmith.tokens import estimate_tokens
+        # ~4 chars per token heuristic
+        t = estimate_tokens("Write a short poem about the sea.")
+        self.assertGreater(t, 5)
+        self.assertLess(t, 15)
+
+    def test_estimate_long_words(self):
+        from promptsmith.tokens import estimate_tokens
+        short = estimate_tokens("cat dog bird")
+        longw = estimate_tokens("antidisestablishmentarianism " * 5)
+        self.assertGreater(longw, short)
+
+    def test_token_report(self):
+        from promptsmith.tokens import token_report
+        r = token_report("Hello world, this is a test prompt.")
+        self.assertIn("tokens", r)
+        self.assertIn("context_share", r)
+        self.assertEqual(r["model"], "gpt-4o")
+        self.assertGreater(r["tokens"], 0)
+
+    def test_token_report_json_schema(self):
+        from promptsmith.tokens import token_report
+        r = token_report("Test", model="claude-3-5-sonnet")
+        self.assertEqual(set(r),
+                         {"prompt", "tokens", "characters", "words",
+                          "model", "context_window", "context_share", "note"})
+
+    def test_context_share(self):
+        from promptsmith.tokens import context_share
+        self.assertAlmostEqual(context_share(64000, "gpt-4o"), 0.5)
+        self.assertAlmostEqual(context_share(0, "gpt-4o"), 0.0)
 
 
 if __name__ == "__main__":

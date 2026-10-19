@@ -1,4 +1,4 @@
-"""Build assets/demo.svg from REAL promptsmith 1.2.0 output.
+"""Build assets/demo.svg from REAL promptsmith 1.8.0 output.
 Run from the repo root:  python3 scripts/make_demo.py
 Every line in the SVG was produced by the installed CLI."""
 import subprocess, html, os

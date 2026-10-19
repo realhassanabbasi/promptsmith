@@ -1,19 +1,20 @@
-"""Agent skill export: package PromptSmith's rubric as an installable skill.
+"""Agent skill export: package PromptSmith's rubric AND its improvement loop.
 
 Agent skills (Claude Code, Codex, Cursor) are small SKILL.md instruction
-packs. This module renders one from PromptSmith's REAL scoring logic and
-enhancement pipeline — nothing invented, nothing hardcoded twice.
+packs. This module renders one from PromptSmith's REAL scoring, comparison
+and enhancement pipeline — nothing invented, nothing hardcoded twice.
 """
 
 import os
 
 from . import scorer
-from .enhancer import FORMATS, REQUIREMENTS, ROLES, enhance
+from .enhancer import FORMATS, REQUIREMENTS, ROLES
+from .improve import improve_prompt, what_improved
 
 SKILL_NAME = "promptsmith"
 
-# The worked example is produced by the real enhance() call at render time,
-# so the skill always shows genuine output, never a mockup.
+# The worked example is produced by the real improve() pipeline at render
+# time, so the skill always shows genuine output, never a mockup.
 EXAMPLE_ROUGH = "help me write an essay about climate change"
 
 
@@ -59,15 +60,47 @@ def _roles_section():
     return "\n".join(lines) + "\n"
 
 
+def _workflow_section():
+    return (
+        "## The improvement loop\n\n"
+        "Scoring alone is not the point. Run every prompt through this loop:\n\n"
+        "1. **Score the draft** with the 5 checks above. Write down every "
+        "check below full marks — that list is your repair plan.\n\n"
+        "2. **Rebuild in one pass**: intent role → Task → Context "
+        "(2–3 sentences) → Requirements → Output format → Guardrail "
+        "('say when unsure'). Fix the weak checks first; do not rewrite "
+        "the checks that already score full marks.\n\n"
+        "3. **Prove it got better**: score the rebuild on the same 5 checks "
+        "and demand a positive margin (rebuilt − draft, in points). If the "
+        "margin is zero or negative, do not ship it — fix the single check "
+        "with the biggest gap and re-score. A rewrite that only *looks* "
+        "better but scores the same is a wasted rewrite.\n\n"
+        "4. **Keep the good ones**: save named prompts with version history. "
+        "Every re-save keeps the before→after scores on the record, so the "
+        "version list is a scoreboard: last score, best score, and the "
+        "improvement (Δ) since the first version.\n\n"
+        "5. **Track over time**: log scores for repeated prompts and watch "
+        "the trend — improving, steady, or slipping. A slipping prompt "
+        "means the task drifted; rebuild it.\n\n"
+        "With the PromptSmith CLI installed, the loop maps to commands: "
+        "`score` → `improve` → `compare` → `save` / `library` → `report`. "
+        "The workflow above works without the tool too.\n"
+    )
+
+
 def _example_section():
-    result = enhance(EXAMPLE_ROUGH)
+    result = improve_prompt(EXAMPLE_ROUGH)
+    top = what_improved(result["deltas"], top=3)
+    gains = ", ".join(f"{check} +{delta}" for check, delta in top)
     return (
         "## Worked example (real output)\n\n"
         f'Rough prompt: "{EXAMPLE_ROUGH}"\n\n'
-        f"Scored {result['before']}/100 ({scorer.grade(result['before'])}) → "
-        f"enhanced {result['after']}/100 ({scorer.grade(result['after'])}), "
-        f"intent `{result['intent']}` (confidence {result['confidence']}).\n\n"
-        "```\n" + result["prompt"] + "\n```\n"
+        f"Scored {result['before']['score']}/100 ({scorer.grade(result['before']['score'])}) → "
+        f"improved {result['after']['score']}/100 ({scorer.grade(result['after']['score'])}), "
+        f"margin +{result['margin']} points, intent `{result['intent']}` "
+        f"(confidence {result['confidence']}).\n\n"
+        f"Biggest gains: {gains}.\n\n"
+        "```\n" + result["enhanced"] + "\n```\n"
     )
 
 
@@ -76,8 +109,9 @@ def render_skill(name=SKILL_NAME):
     frontmatter = (
         "---\n"
         f"name: {name}\n"
-        "description: Score prompts 0-100 and rewrite them using a 5-check "
-        "rubric (clarity, context, specificity, format, guardrails) with "
+        "description: Score prompts 0-100, then run the improvement loop — "
+        "rebuild, prove the gain, version the result — on a 5-check rubric "
+        "(clarity, context, specificity, format, guardrails) with "
         "intent-specific roles.\n"
         "---\n"
     )
@@ -88,6 +122,8 @@ def render_skill(name=SKILL_NAME):
         + _checks_section()
         + "\n"
         + _roles_section()
+        + "\n"
+        + _workflow_section()
         + "\n"
         + _example_section()
         + "\n## Rebuild recipe\n\n"

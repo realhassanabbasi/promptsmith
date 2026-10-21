@@ -7,6 +7,8 @@ import sys
 from . import __version__, enhance
 from .classifier import predict_intent
 from .compare import compare_prompts
+from .cost import MODEL_PRICES, cost_report
+from .diff import diff_payload, diff_stats, render_diff
 from .history import load_history, log_score, trend, verdict
 from .improve import improve_prompt, what_improved
 from .library import entries_for, library_path, load_library, save_entry, summarize
@@ -81,6 +83,8 @@ def cmd_enhance(args):
     print(bold("— Enhanced prompt (copy everything below) —") + "\n")
     print(result["prompt"])
     print()
+    if args.diff:
+        _print_change_block(args.prompt, result["prompt"])
     if args.save:
         with open(args.save, "w", encoding="utf-8") as f:
             f.write(result["prompt"])
@@ -157,6 +161,34 @@ def _read_prompt_file(path):
         sys.exit(1)
 
 
+def _print_change_block(before, after):
+    """Show what changed, word by word, between two prompt texts."""
+    stats = diff_stats(before, after)
+    print(f"{bold('What changed:')} {stats['words_before']} → "
+          f"{stats['words_after']} words "
+          f"({green('+' + str(stats['added']))} / "
+          f"{yellow('-' + str(stats['removed']))})\n")
+    print(render_diff(before, after, color=sys.stdout.isatty()))
+    print()
+
+
+def cmd_diff(args):
+    """Show the word-level changes between two prompt files."""
+    a = _read_prompt_file(args.file_a)
+    b = _read_prompt_file(args.file_b)
+    if not a or not b:
+        print("Both files need at least one prompt in them.", file=sys.stderr)
+        sys.exit(1)
+    if args.json:
+        print(json.dumps({
+            "a": args.file_a, "b": args.file_b,
+            **diff_payload(a, b),
+        }, indent=2))
+        return
+    print(f"\n{bold('Diff:')} {args.file_a}  →  {args.file_b}\n")
+    _print_change_block(a, b)
+
+
 def cmd_compare(args):
     """Score two prompt files against each other, check by check."""
     a = _read_prompt_file(args.file_a)
@@ -203,6 +235,8 @@ def cmd_compare(args):
                 print(f"\n{bold(f'{name} could still fix:')}")
                 for f in side["feedback"]:
                     print(f"  • {f}")
+    if args.diff:
+        _print_change_block(a, b)
     print()
 
 
@@ -456,6 +490,8 @@ def build_parser():
     e = sub.add_parser("enhance", help="Rewrite a rough prompt into an engineered one")
     e.add_argument("prompt", help="The prompt text in quotes")
     e.add_argument("--save", metavar="FILE", help="Also save the result to a file")
+    e.add_argument("--diff", action="store_true",
+                   help="Also show what the rewrite changed, word by word")
     e.add_argument("--json", action="store_true",
                    help="Print the result as machine-readable JSON")
     e.set_defaults(func=cmd_enhance)
@@ -487,7 +523,16 @@ def build_parser():
                    help="Print the comparison as machine-readable JSON")
     c.add_argument("--log", action="store_true",
                    help="Append both runs to .promptsmith/history.jsonl")
+    c.add_argument("--diff", action="store_true",
+                   help="Also show the word-level changes between A and B")
     c.set_defaults(func=cmd_compare)
+
+    d = sub.add_parser("diff", help="Show word-level changes between two prompts")
+    d.add_argument("file_a", help="File holding prompt A (whole file = one prompt)")
+    d.add_argument("file_b", help="File holding prompt B (whole file = one prompt)")
+    d.add_argument("--json", action="store_true",
+                   help="Print the diff as machine-readable JSON")
+    d.set_defaults(func=cmd_diff)
 
     r = sub.add_parser("report", help="Show score history trends per prompt")
     r.add_argument("--json", action="store_true",

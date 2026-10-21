@@ -307,7 +307,7 @@ class TestSkill(unittest.TestCase):
 
     def test_version_is_1_9_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.9.0")
+        self.assertEqual(promptsmith.__version__, "1.10.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -788,6 +788,81 @@ class TestTokens(unittest.TestCase):
         from promptsmith.tokens import context_share
         self.assertAlmostEqual(context_share(64000, "gpt-4o"), 0.5)
         self.assertAlmostEqual(context_share(0, "gpt-4o"), 0.0)
+
+
+class TestCost(unittest.TestCase):
+    def test_cost_math_custom_prices(self):
+        from promptsmith.cost import cost_estimate
+        r = cost_estimate(1_000_000, 500_000, in_price=2.0, out_price=8.0)
+        self.assertAlmostEqual(r["in_cost_usd"], 2.0)
+        self.assertAlmostEqual(r["out_cost_usd"], 4.0)
+        self.assertAlmostEqual(r["total_usd"], 6.0)
+        self.assertTrue(r["prices_custom"])
+        self.assertIsNone(r["prices_checked"])
+
+    def test_cost_model_table(self):
+        from promptsmith.cost import cost_estimate
+        r = cost_estimate(1_000_000, 0, model="gpt-4o")
+        self.assertEqual(r["in_cost_usd"], 2.50)
+        self.assertEqual(r["model"], "gpt-4o")
+        self.assertFalse(r["prices_custom"])
+        self.assertEqual(r["prices_checked"], "2026-10-19")
+
+    def test_cost_unknown_model(self):
+        from promptsmith.cost import cost_estimate
+        with self.assertRaises(ValueError) as ctx:
+            cost_estimate(100, 100, model="does-not-exist")
+        self.assertIn("gpt-4o", str(ctx.exception))
+
+    def test_cost_zero_tokens(self):
+        from promptsmith.cost import cost_estimate
+        r = cost_estimate(0, 0, model="gpt-4o")
+        self.assertEqual(r["total_usd"], 0)
+
+    def test_cost_report_schema(self):
+        from promptsmith.cost import cost_report
+        r = cost_report("help me with python", model="claude-sonnet-5.5", calls=1000)
+        expected = {"prompt", "tokens", "out_tokens_estimate", "out_ratio",
+                    "calls", "cost_per_call_usd", "budget_usd", "model",
+                    "in_price_per_1m", "out_price_per_1m", "prices_custom",
+                    "prices_checked", "note"}
+        self.assertEqual(set(r), expected)
+        self.assertAlmostEqual(r["budget_usd"], r["cost_per_call_usd"] * 1000, places=3)
+        self.assertEqual(r["model"], "claude-sonnet-5.5")
+
+    def test_cost_report_out_ratio(self):
+        from promptsmith.cost import cost_report
+        r = cost_report("help me with python", out_ratio=0.5)
+        self.assertEqual(r["out_tokens_estimate"], round(r["tokens"] * 0.5))
+        with self.assertRaises(ValueError):
+            cost_report("x", calls=0)
+
+    def test_cli_cost_text(self):
+        from promptsmith.cli import build_parser
+        args = build_parser().parse_args(["cost", "help me with python",
+                                          "--model", "gpt-4o", "--calls", "1000"])
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            args.func(args)
+        out = buf.getvalue()
+        self.assertIn("Cost:", out)
+        self.assertIn("Budget:", out)
+        self.assertIn("1,000 calls", out)
+
+    def test_cli_cost_json_and_prices(self):
+        from promptsmith.cli import build_parser
+        args = build_parser().parse_args(["cost", "hello", "--json"])
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            args.func(args)
+        data = json.loads(buf.getvalue())
+        self.assertIn("cost_per_call_usd", data)
+        self.assertEqual(data["model"], "gpt-4o")
+        args = build_parser().parse_args(["cost", "--prices", "ignored"])
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            args.func(args)
+        self.assertIn("gpt-4o", buf.getvalue())
 
 
 if __name__ == "__main__":

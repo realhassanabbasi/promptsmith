@@ -26,6 +26,7 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 - **`history`** — log scored runs (`score`/`compare --log`) and print per-prompt trend reports (`report`): runs, averages, sparklines, and an improving/steady/slipping verdict (`--json` for dashboards)
 - **`library`** — save named prompts as versioned library entries (`save NAME "prompt"`; `--improve` saves the enhanced version too): `library` lists each name's versions/last/best, `library NAME` shows its full version history — your best-scoring prompt is always one glance away (`--tags`, `--json`)
 - **`tokens`** — estimate token count and context-window share for any prompt: `tokens "prompt"` prints ~tokens, words, chars, and % of the model's window used (`--model` to pick the model, `--json` for scripts)
+- **`cost`** — estimate API cost per call and the budget for N calls: `cost "prompt"` prints per-call cost and an N-call budget from an offline price table (11 models, snapshot checked 2026-10-19), `--model` to pick the model, `--out-ratio` for output length, `--calls` for the budget, `--in-price/--out-price` for your own rates, `--prices` to see the table, `--json` for scripts
 - **`templates`** — 8 fill-in-the-blank templates (debug code, explain concepts, learn vocabulary, study plans…)
 - **`interactive`** — guided Q&A that builds your prompt with you
 - **`skill`** — generate an installable agent skill (SKILL.md) from the real scoring rubric AND the full score→improve→compare→version loop, so coding agents apply the same workflow themselves
@@ -66,6 +67,10 @@ promptsmith report
 promptsmith save py-help "help me with python" --tags coding,debug
 promptsmith library
 
+# estimate API cost per call and the N-call budget
+promptsmith cost "help me with python" --model claude-sonnet-5.5 --calls 1000
+promptsmith cost --prices   # see the snapshot price table
+
 # guided mode
 promptsmith interactive
 ```
@@ -88,6 +93,34 @@ Python 3.9+ and you're good. A CI workflow for 3.10 / 3.11 / 3.12 ships with the
 repo the moment it's added under `.github/workflows/` (see `.github/workflows/ci.yml`
 in the source tree — GitHub Apps can't push workflow files, so this one goes in
 by hand).
+
+## Cost estimation
+
+Real output — what a prompt costs to run, from an offline price table:
+
+```
+$ promptsmith cost "help me write an essay about climate change" --model gpt-4o --calls 1000
+
+Cost: ~$0.000137 per call (11 in + 11 out tokens)
+
+  Model: gpt-4o ($2.50 in / $10.00 out per 1M, checked 2026-10-19)
+  Output assumed: 1.0x input length (--out-ratio to change)
+  Budget: 1,000 calls ~ $0.1370
+
+  Note: tokens are the offline heuristic; prices are a
+  2026-10-19 snapshot — verify with the provider before budgeting.
+```
+
+Prices are public rate-card snapshots (11 models: GPT-4o/5, Claude
+Sonnet/Opus/Haiku 5.5, Gemini 3.1 Pro / 3.8 Flash, Grok 4.7, GPT-6.1 Sol)
+collected from provider pricing pages and independent comparisons, each
+carrying its check date. `cost --prices` prints the table with sources.
+For real budgets, pass your own rates — the table is a starting point,
+not a contract:
+
+```
+$ promptsmith cost "help me with python" --in-price 2.50 --out-price 10.00 --json
+```
 
 ## Batch mode
 
@@ -395,6 +428,7 @@ Honest ones, verified against the code:
 - **Scores are heuristic, not measured.** The rubric is a hand-written checklist. The "37 → 92" gain is computed by the *same* scorer that shaped the enhancement — self-reported progress, not an independent measurement of answer quality.
 - **No model calls, ever.** PromptSmith never talks to an LLM, so it can't verify that an enhanced prompt actually gets better answers. That final check is yours.
 - **Terminal needed for two modes.** `interactive` and `templates --show` read from `input()` — they need a real terminal, not a pipe.
+- **Cost prices are a snapshot, not live.** The price table was checked 2026-10-19 from public rate cards; providers change prices without notice. Every `cost` report prints its check date, and `--in-price`/`--out-price` exist precisely so real budgets use real rates. Token counts are the offline heuristic too — for exact billing numbers, use the provider's own tokenizer and price page.
 
 ## Project structure
 
@@ -407,7 +441,8 @@ promptsmith/
 ├── promptsmith/
 │   ├── __init__.py        # public API
 │   ├── __main__.py        # `python -m promptsmith`
-│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/report/improve/save/library/tokens)
+│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/report/improve/save/library/tokens/cost)
+│   ├── cost.py          # offline API cost estimation — price table + per-call/N-call budgets
 │   ├── tokens.py          # offline token estimation + context-window share
 │   ├── classifier.py      # Naive Bayes intent classifier, from scratch (+0.35 fallback)
 │   ├── compare.py         # `promptsmith compare` — head-to-head, per-check deltas
@@ -421,7 +456,7 @@ promptsmith/
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 74 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, history, improve, library)
+│   └── test_promptsmith.py  # 88 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, history, improve, library, tokens, cost)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

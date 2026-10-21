@@ -14,6 +14,7 @@ from .scorer import grade, score_prompt
 from .skills import SKILL_NAME, render_skill, write_skill
 from .templates import TEMPLATES, names, placeholders, render
 from .tokens import estimate_tokens, token_report
+from .cost import MODEL_PRICES, cost_report
 
 # tiny color helpers, no dependencies needed
 def _c(code, text):
@@ -401,6 +402,41 @@ def cmd_tokens(args):
     print(f"  Use a real tokenizer for exact counts.\n")
 
 
+def cmd_cost(args):
+    if args.prices:
+        print(f"\n{bold('Snapshot prices')} (USD per 1M tokens):\n")
+        for name in sorted(MODEL_PRICES):
+            p = MODEL_PRICES[name]
+            print(f"  {name:<18} ${p['input']:<7.2f} in / ${p['output']:<7.2f} out"
+                  f"  (checked {p['checked']})")
+        print(f"\n  {yellow('Note:')} snapshot checked 2026-10-19 — verify with the")
+        print(f"  provider before budgeting. Use --in-price/--out-price")
+        print(f"  to pass your own rates.\n")
+        return
+    try:
+        report = cost_report(args.prompt, model=args.model, calls=args.calls,
+                             out_ratio=args.out_ratio, in_price=args.in_price,
+                             out_price=args.out_price)
+    except ValueError as e:
+        print(f"\n{bold('Error:')} {e}\n")
+        sys.exit(2)
+    if args.json:
+        print(json.dumps(report, indent=2))
+        return
+    rate_line = (f"${report['in_price_per_1m']:.2f} in / "
+                 f"${report['out_price_per_1m']:.2f} out per 1M"
+                 + (", custom rates" if report["prices_custom"]
+                    else f", checked {report['prices_checked']}"))
+    print(f"\n{bold('Cost:')} ~${report['cost_per_call_usd']:.6f} per call "
+          f"({report['tokens']} in + {report['out_tokens_estimate']} out tokens)\n")
+    print(f"  Model: {report['model']} ({rate_line})")
+    print(f"  Output assumed: {report['out_ratio']}x input length "
+          f"(--out-ratio to change)")
+    print(f"  Budget: {report['calls']:,} calls ~ ${report['budget_usd']:.4f}\n")
+    print(f"  {yellow('Note:')} tokens are the offline heuristic; prices are a")
+    print(f"  2026-10-19 snapshot — verify with the provider before budgeting.\n")
+
+
 def build_parser():
     p = argparse.ArgumentParser(
         prog="promptsmith",
@@ -493,6 +529,24 @@ def build_parser():
     tk.add_argument("--json", action="store_true",
                     help="Print as machine-readable JSON")
     tk.set_defaults(func=cmd_tokens)
+
+    ct = sub.add_parser("cost", help="Estimate API cost per call and for N calls")
+    ct.add_argument("prompt", help="The prompt to price")
+    ct.add_argument("--model", default="gpt-4o",
+                    help="Model price table (default: gpt-4o; see --prices)")
+    ct.add_argument("--calls", type=int, default=1,
+                    help="Number of calls for the budget estimate (default: 1)")
+    ct.add_argument("--out-ratio", type=float, default=1.0,
+                    help="Assumed output length as a multiple of input (default: 1.0)")
+    ct.add_argument("--in-price", type=float, default=None,
+                    help="Custom input price per 1M tokens (overrides snapshot)")
+    ct.add_argument("--out-price", type=float, default=None,
+                    help="Custom output price per 1M tokens (overrides snapshot)")
+    ct.add_argument("--json", action="store_true",
+                    help="Print as machine-readable JSON")
+    ct.add_argument("--prices", action="store_true",
+                    help="Print the snapshot price table and exit")
+    ct.set_defaults(func=cmd_cost)
     return p
 
 

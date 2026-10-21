@@ -5,6 +5,7 @@ import json
 import sys
 
 from . import __version__, enhance
+from .check import check_library, check_name, check_payload
 from .classifier import predict_intent
 from .compare import compare_prompts
 from .cost import MODEL_PRICES, cost_report
@@ -382,6 +383,45 @@ def cmd_library(args):
     print()
 
 
+def cmd_check(args):
+    """Re-score the saved library against its own history; flag regressions."""
+    records = load_library()
+    if not records:
+        print("Library is empty — run `promptsmith save NAME \"...\"` "
+              "to add your first prompt.")
+        return
+    if args.name:
+        result = check_name(args.name, records)
+        if result is None:
+            print(f"No saved prompt named \"{args.name}\".")
+            return
+        results = [result]
+    else:
+        results = check_library(records)
+    if args.json:
+        print(json.dumps(check_payload(results), indent=2))
+    else:
+        verdict_marks = {"regressed": "▼", "steady": "▬", "improved": "▲"}
+        print(f"\n{bold('Prompt health')} — {len(results)} checked "
+              f"(re-scored against recorded best)\n")
+        print(f"  {'name':24} {'ver':>4} {'now':>4} {'best':>4} "
+              f"{'Δ':>4}  verdict")
+        for r in results:
+            mark = verdict_marks[r["verdict"]]
+            delta = f"{r['delta']:+d}{mark}"
+            print(f"  {r['name'][:24]:24} {r['versions']:>4} "
+                  f"{r['current']:>4} {r['best']:>4} {delta:>5}  "
+                  f"{r['verdict']}")
+        print()
+        regressed = [r for r in results if r["verdict"] == "regressed"]
+        if regressed:
+            print(f"{bold(f'{len(regressed)} regressed')} — re-pass "
+                  f"them before shipping: improve, verify, re-save.\n")
+    if args.fail_on_regression and \
+            any(r["verdict"] == "regressed" for r in results):
+        sys.exit(1)
+
+
 def cmd_templates(args):
     if args.show:
         print(f"\n{bold(args.show)} — {TEMPLATES[args.show]['about']}")
@@ -566,6 +606,16 @@ def build_parser():
     lb.add_argument("--json", action="store_true",
                     help="Print as machine-readable JSON")
     lb.set_defaults(func=cmd_library)
+
+    ck = sub.add_parser("check", help="Re-score the saved library; flag regressions")
+    ck.add_argument("name", nargs="?", default=None,
+                    help="Check only this saved name (omit for the whole library)")
+    ck.add_argument("--fail-on-regression", action="store_true",
+                    help="Exit 1 if any prompt scores below its recorded best "
+                         "(useful in CI)")
+    ck.add_argument("--json", action="store_true",
+                    help="Print as machine-readable JSON")
+    ck.set_defaults(func=cmd_check)
 
     tk = sub.add_parser("tokens", help="Estimate token count and context usage")
     tk.add_argument("prompt", help="The prompt to measure")

@@ -305,9 +305,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_9_0(self):
+    def test_version_is_1_11_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.10.0")
+        self.assertEqual(promptsmith.__version__, "1.11.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -863,6 +863,114 @@ class TestCost(unittest.TestCase):
         with contextlib.redirect_stdout(buf):
             args.func(args)
         self.assertIn("gpt-4o", buf.getvalue())
+
+
+class TestDiff(unittest.TestCase):
+    def test_identical_texts_have_no_changes(self):
+        from promptsmith.diff import word_diff, diff_stats
+        segs = word_diff("help me with python", "help me with python")
+        self.assertTrue(all(op == "keep" for op, _ in segs))
+        stats = diff_stats("help me with python", "help me with python")
+        self.assertEqual(stats["added"], 0)
+        self.assertEqual(stats["removed"], 0)
+
+    def test_addition_and_removal_counts(self):
+        from promptsmith.diff import diff_stats
+        stats = diff_stats("help me with python", "help me learn python today")
+        self.assertEqual(stats["added"], 2)   # learn, today
+        self.assertEqual(stats["removed"], 1)  # with
+        self.assertEqual(stats["words_before"],
+                         stats["unchanged"] + stats["removed"])
+        self.assertEqual(stats["words_after"],
+                         stats["unchanged"] + stats["added"])
+
+    def test_render_diff_markers(self):
+        from promptsmith.diff import render_diff
+        out = render_diff("help me with python",
+                          "help me learn python", color=False)
+        self.assertIn("-with-", out)
+        self.assertIn("+learn+", out)
+        self.assertIn("help", out)  # unchanged words stay plain
+
+    def test_diff_payload_schema(self):
+        from promptsmith.diff import diff_payload
+        p = diff_payload("one two", "one three four")
+        self.assertEqual(set(p), {"stats", "segments"})
+        self.assertEqual(set(p["stats"]),
+                         {"words_before", "words_after", "added",
+                          "removed", "unchanged"})
+        for seg in p["segments"]:
+            self.assertIn(seg["op"], {"keep", "del", "ins"})
+            self.assertIsInstance(seg["text"], str)
+
+    def test_cli_diff_text_and_json(self):
+        from promptsmith.cli import build_parser
+        paths = []
+        for content in ("help me with python", "help me learn python today"):
+            with tempfile.NamedTemporaryFile("w", suffix=".txt",
+                                             delete=False) as f:
+                f.write(content)
+                paths.append(f.name)
+        try:
+            args = build_parser().parse_args(["diff", paths[0], paths[1]])
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                args.func(args)
+            out = buf.getvalue()
+            self.assertIn("What changed:", out)
+            self.assertIn("-with-", out)
+            self.assertIn("+learn+", out)
+            args = build_parser().parse_args(
+                ["diff", paths[0], paths[1], "--json"])
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                args.func(args)
+            data = json.loads(buf.getvalue())
+            self.assertEqual(data["stats"]["removed"], 1)
+            self.assertEqual(data["stats"]["added"], 2)
+        finally:
+            for p in paths:
+                os.unlink(p)
+
+    def test_cli_diff_missing_file_exits_1(self):
+        from promptsmith.cli import build_parser
+        args = build_parser().parse_args(["diff", "/no/such/file", "/nope"])
+        with self.assertRaises(SystemExit) as ctx:
+            with contextlib.redirect_stdout(io.StringIO()):
+                args.func(args)
+        self.assertEqual(ctx.exception.code, 1)
+
+    def test_cli_enhance_diff_shows_changes(self):
+        from promptsmith.cli import build_parser
+        args = build_parser().parse_args(["enhance", "help me with python",
+                                          "--diff"])
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            args.func(args)
+        out = buf.getvalue()
+        self.assertIn("What changed:", out)
+        self.assertTrue("-" in out and "+" in out)
+
+    def test_cli_compare_diff_shows_changes(self):
+        from promptsmith.cli import build_parser
+        paths = []
+        for content in ("help me with python",
+                        "Write a cover letter for a data science internship. "
+                        "Keep it under 250 words."):
+            with tempfile.NamedTemporaryFile("w", suffix=".txt",
+                                             delete=False) as f:
+                f.write(content)
+                paths.append(f.name)
+        try:
+            args = build_parser().parse_args(
+                ["compare", paths[0], paths[1], "--diff"])
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                args.func(args)
+            self.assertIn("What changed:", buf.getvalue())
+        finally:
+            for p in paths:
+                os.unlink(p)
 
 
 if __name__ == "__main__":

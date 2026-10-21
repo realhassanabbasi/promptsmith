@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Deps](https://img.shields.io/badge/dependencies-zero-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-96%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-108%20passing-brightgreen?style=flat-square)
 [![Live demo](https://img.shields.io/badge/demo-live%20in%20browser-black?style=flat-square)](https://realhassanabbasi.github.io/promptsmith/)
 
 **Turn rough prompts into engineered ones.** Paste in *"help me with python"*, get back a structured prompt with a role, context slots, requirements, output format, and guardrails — scored before and after. Works **offline**, with **zero dependencies**.
@@ -26,6 +26,7 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 - **`diff`** — show exactly what changed, word by word: `diff A.txt B.txt` on its own, or `--diff` on `enhance` and `compare` so a score gain is backed by visible edits (`--json` for scripts)
 - **`history`** — log scored runs (`score`/`compare --log`) and print per-prompt trend reports (`report`): runs, averages, sparklines, and an improving/steady/slipping verdict (`--json` for dashboards)
 - **`library`** — save named prompts as versioned library entries (`save NAME "prompt"`; `--improve` saves the enhanced version too): `library` lists each name's versions/last/best, `library NAME` shows its full version history — your best-scoring prompt is always one glance away (`--tags`, `--json`)
+- **`check`** — regression guard for your saved library: re-scores every prompt against its recorded best and flags regressions (rubric upgrades can't silently change what your prompts score); `--fail-on-regression` exits 1 for CI, `--json` for dashboards
 - **`tokens`** — estimate token count and context-window share for any prompt: `tokens "prompt"` prints ~tokens, words, chars, and % of the model's window used (`--model` to pick the model, `--json` for scripts)
 - **`templates`** — 8 fill-in-the-blank templates (debug code, explain concepts, learn vocabulary, study plans…)
 - **`interactive`** — guided Q&A that builds your prompt with you
@@ -70,6 +71,10 @@ promptsmith report
 # save your best prompts as versioned library entries
 promptsmith save py-help "help me with python" --tags coding,debug
 promptsmith library
+
+# guard the library — flag anything that regressed since it was saved
+promptsmith check
+promptsmith check --fail-on-regression   # for CI: exits 1 on any regression
 
 # guided mode
 promptsmith interactive
@@ -229,6 +234,38 @@ help me with python
 The rule of thumb: the changed words should map to the checks that were
 weak before the rewrite. If untouched checks also changed, the rewrite added
 noise instead of focus.
+
+## Regression check
+
+Scores say a rewrite is better; the diff shows *what* changed; `check`
+makes sure your *saved* prompts still score what they used to. It re-scores
+each library entry's keeper text with the **current** rubric and compares it
+to the best score that prompt ever recorded. The scorer is deterministic, so
+a negative delta means the rubric moved — a PromptSmith upgrade made it
+stricter (or fairer) — and the regressed prompts deserve a re-pass before
+they ship again.
+
+Real output (the stored best of 98 came from an older, looser rubric, so the
+current 92 reads as a regression — this is exactly what a rubric upgrade
+looks like):
+
+```
+$ promptsmith check py-help
+
+Prompt health — 1 checked (re-scored against recorded best)
+
+  name                      ver  now best    Δ  verdict
+  py-help                     1   92   98   -6▼  regressed
+
+1 regressed — re-pass them before shipping: improve, verify, re-save.
+```
+
+- `check` — health table for the whole library, regressed first
+- `check --fail-on-regression` — exits 1 when any prompt scores below its
+  recorded best; drop it into CI so a rubric upgrade can't silently change
+  what your prompts score
+- `check --json` — machine-readable `{results, checked, regressed, steady,
+  improved}` for dashboards
 
 ## Score history
 
@@ -409,7 +446,7 @@ More pairs in [`examples/before_after.md`](examples/before_after.md).
                         +--------+---------+    templates / interactive /
                                  |                skill / compare / diff / report /
                                                   improve / save / library /
-                                                  tokens / cost
+                                                  tokens / cost / check
             +--------------------+--------------------+
             |                    |                    |
      +------v------+      +------v------+      +------v------+
@@ -452,7 +489,8 @@ promptsmith/
 ├── promptsmith/
 │   ├── __init__.py        # public API
 │   ├── __main__.py        # `python -m promptsmith`
-│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/diff/report/improve/save/library/tokens/cost)
+│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/diff/report/improve/save/library/tokens/cost/check)
+│   ├── check.py           # `promptsmith check` — re-score the library, flag regressions
 │   ├── cost.py            # `promptsmith cost` — offline API cost estimates (11-model price snapshot)
 │   ├── diff.py            # `promptsmith diff` + `--diff` — word-level change diffs, stdlib difflib
 │   ├── tokens.py          # offline token estimation + context-window share
@@ -468,7 +506,7 @@ promptsmith/
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 96 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost)
+│   └── test_promptsmith.py  # 108 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

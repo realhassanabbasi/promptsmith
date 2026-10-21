@@ -305,9 +305,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_11_0(self):
+    def test_version_is_1_12_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.11.0")
+        self.assertEqual(promptsmith.__version__, "1.12.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -971,6 +971,147 @@ class TestDiff(unittest.TestCase):
         finally:
             for p in paths:
                 os.unlink(p)
+
+
+class TestCheck(unittest.TestCase):
+    WEAK = "help me with python"  # scores 37 on the current rubric
+
+    def _tmp_cwd(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        prev = os.getcwd()
+        os.chdir(tmp.name)
+        self.addCleanup(os.chdir, prev)
+
+    def _run(self, argv):
+        from promptsmith.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(argv)
+        return buf.getvalue()
+
+    def _write_records(self, records):
+        os.makedirs(".promptsmith", exist_ok=True)
+        with open(".promptsmith/library.jsonl", "w", encoding="utf-8") as f:
+            for r in records:
+                r.setdefault("tags", [])
+                f.write(json.dumps(r) + "\n")
+
+    def _record(self, name, score, prompt=None, enhanced=None):
+        return {"name": name, "version": 1, "score": score,
+                "prompt": prompt or self.WEAK, "enhanced": enhanced}
+
+    def test_empty_library_returns_empty(self):
+        from promptsmith.check import check_library
+        self._tmp_cwd()
+        self.assertEqual(check_library(), [])
+
+    def test_saved_prompt_is_steady(self):
+        from promptsmith.check import check_name
+        from promptsmith.library import save_entry
+        self._tmp_cwd()
+        rec = save_entry("py-help", self.WEAK)
+        r = check_name("py-help")
+        self.assertEqual(r["verdict"], "steady")
+        self.assertEqual(r["delta"], 0)
+        self.assertEqual(r["current"], rec["score"])
+        self.assertEqual(r["best"], rec["score"])
+        self.assertEqual(r["versions"], 1)
+
+    def test_regression_detected(self):
+        # a record whose stored score (95) is higher than what the current
+        # rubric gives the same text (37) must read as regressed
+        from promptsmith.check import check_name
+        self._tmp_cwd()
+        self._write_records([self._record("py-help", 95)])
+        r = check_name("py-help")
+        self.assertEqual(r["verdict"], "regressed")
+        self.assertLess(r["delta"], 0)
+        self.assertEqual(r["delta"], r["current"] - 95)
+
+    def test_improvement_detected(self):
+        from promptsmith.check import check_name
+        self._tmp_cwd()
+        self._write_records([self._record("py-help", 10)])
+        r = check_name("py-help")
+        self.assertEqual(r["verdict"], "improved")
+        self.assertGreater(r["delta"], 0)
+
+    def test_keeper_prefers_enhanced_text(self):
+        # --improve saves record the original prompt plus the enhanced text;
+        # the check must re-score the enhanced text (the keeper), not the draft
+        from promptsmith.check import check_name, keeper_text
+        from promptsmith.library import save_entry
+        from promptsmith.scorer import score_prompt
+        self._tmp_cwd()
+        rec = save_entry("py-help", self.WEAK, enhance_it=True)
+        self.assertEqual(keeper_text(rec), rec["enhanced"])
+        r = check_name("py-help")
+        total, _b, _f = score_prompt(rec["enhanced"])
+        self.assertEqual(r["current"], total)
+        self.assertEqual(r["verdict"], "steady")
+
+    def test_unknown_name_returns_none(self):
+        from promptsmith.check import check_name
+        self._tmp_cwd()
+        self._write_records([self._record("py-help", 95)])
+        self.assertIsNone(check_name("no-such-name"))
+
+    def test_check_sorts_regressed_first(self):
+        from promptsmith.check import check_library
+        self._tmp_cwd()
+        self._write_records([self._record("steady-one", 37),
+                             self._record("bad-one", 95)])
+        results = check_library()
+        self.assertEqual([r["name"] for r in results],
+                         ["bad-one", "steady-one"])
+
+    def test_cli_check_text_output(self):
+        from promptsmith.library import save_entry
+        self._tmp_cwd()
+        save_entry("py-help", self.WEAK)
+        out = self._run(["check"])
+        self.assertIn("py-help", out)
+        self.assertIn("steady", out)
+
+    def test_cli_check_unknown_name_message(self):
+        self._tmp_cwd()
+        self._write_records([self._record("py-help", 37)])
+        out = self._run(["check", "no-such-name"])
+        self.assertIn('No saved prompt named "no-such-name".', out)
+
+    def test_cli_check_fail_on_regression_exits_1(self):
+        from promptsmith.cli import main
+        self._tmp_cwd()
+        self._write_records([self._record("py-help", 95)])
+        with self.assertRaises(SystemExit) as cm:
+            with contextlib.redirect_stdout(io.StringIO()):
+                main(["check", "--fail-on-regression"])
+        self.assertEqual(cm.exception.code, 1)
+
+    def test_cli_check_no_regression_exits_0(self):
+        from promptsmith.library import save_entry
+        self._tmp_cwd()
+        save_entry("py-help", self.WEAK)
+        with contextlib.redirect_stdout(io.StringIO()):
+            from promptsmith.cli import main
+            main(["check", "--fail-on-regression"])  # no exception = exit 0
+
+    def test_cli_check_json_schema(self):
+        from promptsmith.library import save_entry
+        self._tmp_cwd()
+        save_entry("py-help", self.WEAK)
+        out = self._run(["check", "--json"])
+        data = json.loads(out)
+        self.assertEqual(data["checked"], 1)
+        self.assertEqual(data["steady"], 1)
+        self.assertEqual(data["regressed"], 0)
+        self.assertEqual(data["improved"], 0)
+        self.assertEqual(len(data["results"]), 1)
+        r = data["results"][0]
+        for key in ("name", "versions", "current", "best",
+                    "delta", "verdict", "tags"):
+            self.assertIn(key, r)
 
 
 if __name__ == "__main__":

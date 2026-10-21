@@ -84,6 +84,8 @@ def _workflow_section():
         "means the task drifted; rebuild it.\n\n"
         "With the PromptSmith CLI installed, the loop maps to commands: "
         "`score` → `improve` → `compare` → `save` / `library` → `report`. "
+        "Measure the prompt's token load with `tokens` and budget its API "
+        "cost with `cost` before shipping. "
         "The workflow above works without the tool too.\n"
     )
 

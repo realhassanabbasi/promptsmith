@@ -305,9 +305,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_13_0(self):
+    def test_version_is_1_14_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.13.0")
+        self.assertEqual(promptsmith.__version__, "1.14.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -632,6 +632,31 @@ class TestImprove(unittest.TestCase):
         self.assertEqual(len(recs), 2)
         self.assertEqual(recs[0]["prompt"], self.WEAK)
         self.assertNotEqual(recs[0]["prompt"], recs[1]["prompt"])
+
+    def test_cli_diff_shows_change_block(self):
+        out = self._run(["improve", self.WEAK, "--diff"])
+        self.assertIn("What changed:", out)
+        self.assertIn("words", out)
+        # changed words are marked with -dashes- and +pluses+
+        self.assertIn("+", out)
+
+    def test_cli_no_diff_block_by_default(self):
+        out = self._run(["improve", self.WEAK])
+        self.assertNotIn("What changed:", out)
+
+    def test_cli_json_diff_payload(self):
+        out = self._run(["improve", self.WEAK, "--json", "--diff"])
+        data = json.loads(out)
+        self.assertIn("diff", data)
+        self.assertIn("stats", data["diff"])
+        self.assertIn("segments", data["diff"])
+        self.assertTrue(data["diff"]["segments"])
+        self.assertGreaterEqual(data["diff"]["stats"]["added"], 0)
+
+    def test_cli_json_has_no_diff_key_without_flag(self):
+        out = self._run(["improve", self.WEAK, "--json"])
+        data = json.loads(out)
+        self.assertNotIn("diff", data)
 
 
 class TestLibrary(unittest.TestCase):

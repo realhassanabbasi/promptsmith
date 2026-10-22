@@ -305,9 +305,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_12_0(self):
+    def test_version_is_1_13_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.12.0")
+        self.assertEqual(promptsmith.__version__, "1.13.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -1112,6 +1112,110 @@ class TestCheck(unittest.TestCase):
         for key in ("name", "versions", "current", "best",
                     "delta", "verdict", "tags"):
             self.assertIn(key, r)
+
+
+class TestExport(unittest.TestCase):
+    WEAK = "help me with python"
+
+    def _tmp_cwd(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        prev = os.getcwd()
+        os.chdir(tmp.name)
+        self.addCleanup(os.chdir, prev)
+
+    def _run(self, argv):
+        from promptsmith.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(argv)
+        return buf.getvalue()
+
+    def test_empty_library_markdown_is_honest(self):
+        from promptsmith.export import export_markdown
+        self._tmp_cwd()
+        out = export_markdown()
+        self.assertIn("No saved prompts yet", out)
+        self.assertIn("# Prompt Library", out)
+
+    def test_empty_library_json_schema(self):
+        from promptsmith.export import export_json
+        self._tmp_cwd()
+        data = json.loads(export_json())
+        self.assertEqual(data["count"], 0)
+        self.assertEqual(data["prompts"], [])
+        self.assertEqual(data["tool"], "promptsmith")
+
+    def test_single_entry_markdown(self):
+        from promptsmith.export import export_markdown
+        from promptsmith.library import save_entry
+        self._tmp_cwd()
+        save_entry("py-help", self.WEAK)
+        out = export_markdown()
+        self.assertIn("## py-help", out)
+        self.assertIn("### v1", out)
+        self.assertIn(self.WEAK, out)
+
+    def test_enhanced_text_included(self):
+        from promptsmith.export import export_markdown
+        from promptsmith.library import save_entry
+        self._tmp_cwd()
+        rec = save_entry("py-help", self.WEAK, enhance_it=True)
+        out = export_markdown()
+        self.assertIn("**Improved version:**", out)
+        self.assertIn(rec["enhanced"][:30], out)
+
+    def test_name_filter(self):
+        from promptsmith.export import export_markdown
+        from promptsmith.library import save_entry
+        self._tmp_cwd()
+        save_entry("py-help", self.WEAK)
+        save_entry("other", "write a poem")
+        out = export_markdown(name="py-help")
+        self.assertIn("## py-help", out)
+        self.assertNotIn("## other", out)
+
+    def test_unknown_name_returns_none(self):
+        from promptsmith.export import export_markdown, export_json
+        from promptsmith.library import save_entry
+        self._tmp_cwd()
+        save_entry("py-help", self.WEAK)
+        self.assertIsNone(export_markdown(name="nope"))
+        self.assertIsNone(export_json(name="nope"))
+
+    def test_versions_oldest_first(self):
+        from promptsmith.export import export_payload
+        from promptsmith.library import save_entry
+        self._tmp_cwd()
+        save_entry("py-help", self.WEAK)
+        save_entry("py-help", "help me with python 3")
+        payload = export_payload()
+        entries = payload["prompts"][0]["entries"]
+        self.assertEqual([e["version"] for e in entries], [1, 2])
+
+    def test_cli_export_json(self):
+        from promptsmith.library import save_entry
+        self._tmp_cwd()
+        save_entry("py-help", self.WEAK)
+        out = self._run(["export", "--format", "json"])
+        data = json.loads(out)
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(data["prompts"][0]["name"], "py-help")
+
+    def test_cli_export_unknown_name(self):
+        self._tmp_cwd()
+        out = self._run(["export", "nope"])
+        self.assertIn('No saved prompt named "nope"', out)
+
+    def test_cli_export_to_file(self):
+        from promptsmith.library import save_entry
+        self._tmp_cwd()
+        save_entry("py-help", self.WEAK)
+        out = self._run(["export", "-o", "lib.md"])
+        self.assertIn("Exported to lib.md", out)
+        self.assertTrue(os.path.isfile("lib.md"))
+        with open("lib.md", encoding="utf-8") as f:
+            self.assertIn("## py-help", f.read())
 
 
 if __name__ == "__main__":

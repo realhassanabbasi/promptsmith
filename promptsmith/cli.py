@@ -253,7 +253,7 @@ def cmd_improve(args):
                   result["after"]["grade"], result["after"]["breakdown"],
                   intent=result["intent"])
     if args.json:
-        print(json.dumps({
+        payload = {
             "prompt": result["prompt"],
             "intent": result["intent"],
             "confidence": result["confidence"],
@@ -262,7 +262,10 @@ def cmd_improve(args):
             "deltas": result["deltas"],
             "margin": result["margin"],
             "enhanced": result["enhanced"],
-        }, indent=2))
+        }
+        if args.diff:
+            payload["diff"] = diff_payload(args.prompt, result["enhanced"])
+        print(json.dumps(payload, indent=2))
         return
 
     before, after = result["before"], result["after"]
@@ -285,6 +288,8 @@ def cmd_improve(args):
     print(f"\n{bold('— Improved prompt (copy everything below) —')}\n")
     print(result["enhanced"])
     print()
+    if args.diff:
+        _print_change_block(args.prompt, result["enhanced"])
     if args.save:
         with open(args.save, "w", encoding="utf-8") as f:
             f.write(result["enhanced"])
@@ -605,6 +610,8 @@ def build_parser():
                    help="Append the before and after runs to .promptsmith/history.jsonl")
     m.add_argument("--save", metavar="FILE",
                    help="Also save the improved prompt to a file")
+    m.add_argument("--diff", action="store_true",
+                   help="Also show the word-level changes the improvement made")
     m.set_defaults(func=cmd_improve)
 
     sv = sub.add_parser("save", help="Save a prompt to the library with a version")

@@ -10,6 +10,7 @@ from .classifier import predict_intent
 from .compare import compare_prompts
 from .cost import MODEL_PRICES, cost_report
 from .diff import diff_payload, diff_stats, render_diff
+from .export import export_json, export_markdown
 from .history import load_history, log_score, trend, verdict
 from .improve import improve_prompt, what_improved
 from .library import entries_for, library_path, load_library, save_entry, summarize
@@ -511,6 +512,23 @@ def cmd_cost(args):
     print(f"  2026-10-19 snapshot — verify with the provider before budgeting.\n")
 
 
+def cmd_export(args):
+    records = load_library()
+    if args.format == "json":
+        out = export_json(records, args.name)
+    else:
+        out = export_markdown(records, args.name)
+    if out is None:
+        print(f"No saved prompt named \"{args.name}\".")
+        return
+    if args.output:
+        with open(args.output, "w", encoding="utf-8") as f:
+            f.write(out + "\n")
+        print(f"Exported to {args.output}")
+        return
+    print(out)
+
+
 def build_parser():
     p = argparse.ArgumentParser(
         prog="promptsmith",
@@ -642,6 +660,15 @@ def build_parser():
     ct.add_argument("--prices", action="store_true",
                     help="Print the snapshot price table and exit")
     ct.set_defaults(func=cmd_cost)
+
+    ex = sub.add_parser("export", help="Export the prompt library to Markdown or JSON")
+    ex.add_argument("name", nargs="?", default=None,
+                    help="Export only this saved name (omit for the whole library)")
+    ex.add_argument("--format", choices=["md", "json"], default="md",
+                    help="Output format (default: md)")
+    ex.add_argument("-o", "--output", default=None,
+                    help="Write to FILE instead of stdout")
+    ex.set_defaults(func=cmd_export)
     return p
 
 

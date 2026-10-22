@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Deps](https://img.shields.io/badge/dependencies-zero-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-118%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-122%20passing-brightgreen?style=flat-square)
 [![Live demo](https://img.shields.io/badge/demo-live%20in%20browser-black?style=flat-square)](https://realhassanabbasi.github.io/promptsmith/)
 
 **Turn rough prompts into engineered ones.** Paste in *"help me with python"*, get back a structured prompt with a role, context slots, requirements, output format, and guardrails — scored before and after. Works **offline**, with **zero dependencies**.
@@ -49,6 +49,7 @@ promptsmith enhance "help me with python"
 
 # or do both in one step — score, enhance, re-score, with proof
 promptsmith improve "help me with python"
+promptsmith improve "help me with python" --diff   # also shows the word-level changes
 
 # score a whole list at once (one prompt per line)
 promptsmith batch my_prompts.txt
@@ -196,17 +197,39 @@ Guardrails: if you are unsure about something, say so instead of guessing.
 It's honest about the trade too: the engineered prompt opens with a role
 sentence, so `clarity` dips 20→12 while the total climbs 37→92.
 
+Real output — `improve --diff` appends the word changes after the improved
+prompt (same block as `enhance --diff`, handy when the margin is small and
+you want to see what actually moved):
+
+```
+$ promptsmith improve "help me with python" --diff
+# score table and improved prompt as above, then:
+
+What changed: 4 → 70 words (+66 / -0)
+
++ You are a senior software engineer who writes clean, well-commented code.
++ Task:
+help me with python
++ Context: (add 2-3 sentences of background here — who this is for, what you've tried)
++ Requirements:
++ - Handle edge cases
++ - Add brief comments on the tricky parts
++ Output format: Provide the code first, then a short explanation of how it works.
++ Guardrails: if you are unsure about something, say so instead of guessing.
+```
+
 `--log` records both the before and after runs in the score history
 (`promptsmith report` shows them as a two-run trend), `--save FILE` writes
 the improved prompt, and `--json` gives the full result
-(`prompt`, `intent`, `before`, `after`, `deltas`, `margin`, `enhanced`)
+(`prompt`, `intent`, `before`, `after`, `deltas`, `margin`, `enhanced`
+— plus a `diff` payload with `--diff`)
 for scripts and pipelines.
 
 ## Change diff
 
 Scores say a rewrite is better; the diff shows *what* changed.
 `diff FILE_A FILE_B` compares two prompts on their own, and `--diff`
-adds the word-level changes to `enhance` and `compare`:
+adds the word-level changes to `enhance`, `compare`, and `improve`:
 
 ```
 $ promptsmith diff draft.txt rewrite.txt
@@ -553,7 +576,7 @@ promptsmith/
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 118 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export)
+│   └── test_promptsmith.py  # 122 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

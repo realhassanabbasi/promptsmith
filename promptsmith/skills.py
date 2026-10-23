@@ -90,7 +90,7 @@ def _workflow_section():
         "best score it ever recorded. A negative delta means the prompt "
         "regressed — re-pass it (rebuild, prove, re-save) before shipping. "
         "Run the guard in CI so regressions block automatically.\n\n"
-        "With the PromptSmith CLI installed, the loop maps to commands: "
+        "With the PromptSmith CLI installed, start with `init` (a project folder with two worked demo prompts), then the loop maps to commands: "
         "`score` → `improve` → `compare` (+`diff` for the word changes) → "
         "`save` / `library` → `report` → `check` (the regression guard) → "
         "`export` (share the library as Markdown or JSON). "

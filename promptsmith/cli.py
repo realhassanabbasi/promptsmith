@@ -13,6 +13,7 @@ from .diff import diff_payload, diff_stats, render_diff
 from .export import export_json, export_markdown
 from .history import load_history, log_score, trend, verdict
 from .improve import improve_prompt, what_improved
+from .init import init_project
 from .library import entries_for, library_path, load_library, save_entry, summarize
 from .scorer import grade, score_prompt
 from .skills import SKILL_NAME, render_skill, write_skill
@@ -534,6 +535,38 @@ def cmd_export(args):
     print(out)
 
 
+def cmd_init(args):
+    result = init_project(args.dir, bare=args.bare, force=args.force)
+    if args.json:
+        payload = dict(result)
+        payload["seeds"] = [
+            {k: s[k] for k in ("name", "score", "grade", "before_score",
+                               "tags", "version")}
+            for s in result["seeds"]
+        ]
+        print(json.dumps(payload, indent=2))
+        return
+    if result["status"] == "already":
+        print(result["message"])
+        return
+    print(f"\n{bold('PromptSmith project ready:')} {cyan(result['target'])}\n")
+    for f in result["files"]:
+        print(f"  {green('created')}  {f}")
+    if result["seeds"]:
+        print(f"\n{bold('Seed prompts (real scores, from the local scorer):')}")
+        for s in result["seeds"]:
+            if s["enhanced"]:
+                line = (f"  {cyan(s['name'])} — {s['before_score']} → "
+                        f"{s['score']}/100 ({s['grade']})")
+            else:
+                line = f"  {cyan(s['name'])} — {s['score']}/100 ({s['grade']})"
+            print(line)
+    print(f"\n{bold('Next steps (in this folder):')}")
+    print("  promptsmith library demo-engineered   # the worked example")
+    print("  promptsmith check                     # the regression guard")
+    print("  promptsmith save my-prompt \"...\"        # save your own\n")
+
+
 def build_parser():
     p = argparse.ArgumentParser(
         prog="promptsmith",
@@ -676,6 +709,17 @@ def build_parser():
     ex.add_argument("-o", "--output", default=None,
                     help="Write to FILE instead of stdout")
     ex.set_defaults(func=cmd_export)
+
+    ni = sub.add_parser("init", help="Start a PromptSmith project folder with demo prompts")
+    ni.add_argument("dir", nargs="?", default=".",
+                    help="Project folder (default: current dir; created if missing)")
+    ni.add_argument("--bare", action="store_true",
+                    help="Only create .promptsmith/ — skip demo seeds and PROMPTS.md")
+    ni.add_argument("--force", action="store_true",
+                    help="Top up an existing project instead of refusing")
+    ni.add_argument("--json", action="store_true",
+                    help="Print the result as machine-readable JSON")
+    ni.set_defaults(func=cmd_init)
     return p
 
 

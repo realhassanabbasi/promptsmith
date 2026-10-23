@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Deps](https://img.shields.io/badge/dependencies-zero-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-122%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-130%20passing-brightgreen?style=flat-square)
 [![Live demo](https://img.shields.io/badge/demo-live%20in%20browser-black?style=flat-square)](https://realhassanabbasi.github.io/promptsmith/)
 
 **Turn rough prompts into engineered ones.** Paste in *"help me with python"*, get back a structured prompt with a role, context slots, requirements, output format, and guardrails — scored before and after. Works **offline**, with **zero dependencies**.
@@ -18,6 +18,7 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 
 ## Features
 
+- **`init`** — start a PromptSmith project folder in one command: creates `.promptsmith/`, seeds the library with two worked demo prompts (real scorer output, 37 weak → 92 excellent), and drops a `PROMPTS.md` quickstart cheatsheet — new users get a working project, not a blank screen (`--bare` for an empty folder, `--json` for scripts)
 - **`improve`** — the one-step loop: score, enhance, and re-score a prompt in one command — before/after table with per-check deltas, what improved, `--log`, `--save`, `--json`
 - **`enhance`** — rewrite any rough prompt into a structured, engineered one (+40–55 points on average)
 - **`score`** — grade a prompt 0–100 on 5 checks, with concrete fix-it feedback (`--json` for scripts)
@@ -41,6 +42,9 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 # install straight from GitHub (verified clean install, zero dependencies)
 pip install git+https://github.com/realhassanabbasi/promptsmith.git
 
+# start a project folder — working demo prompts included
+promptsmith init my-prompts && cd my-prompts
+
 # score a prompt
 promptsmith score "help me with python"
 
@@ -48,7 +52,6 @@ promptsmith score "help me with python"
 promptsmith enhance "help me with python"
 
 # or do both in one step — score, enhance, re-score, with proof
-promptsmith improve "help me with python"
 promptsmith improve "help me with python" --diff   # also shows the word-level changes
 
 # score a whole list at once (one prompt per line)
@@ -105,6 +108,34 @@ Python 3.9+ and you're good. A CI workflow for 3.10 / 3.11 / 3.12 ships with the
 repo the moment it's added under `.github/workflows/` (see `.github/workflows/ci.yml`
 in the source tree — GitHub Apps can't push workflow files, so this one goes in
 by hand).
+
+## Start a project
+
+Real output — a blank folder becomes a working project in one command.
+The two seeds are the real scorer's own output, computed at init time:
+
+```
+$ promptsmith init my-prompts
+
+PromptSmith project ready: /home/user/my-prompts
+
+  created  .promptsmith/library.jsonl
+  created  .promptsmith/history.jsonl
+  created  PROMPTS.md
+
+Seed prompts (real scores, from the local scorer):
+  demo-rough — 37/100 (weak)
+  demo-engineered — 37 → 92/100 (excellent)
+
+Next steps (in this folder):
+  promptsmith library demo-engineered   # the worked example
+  promptsmith check                     # the regression guard
+  promptsmith save my-prompt "..."        # save your own
+```
+
+`PROMPTS.md` is a one-page cheatsheet of the loop; `promptsmith init --bare`
+creates only `.promptsmith/`; re-running without `--force` refuses instead of
+overwriting your library.
 
 ## Batch mode
 
@@ -558,11 +589,12 @@ promptsmith/
 ├── promptsmith/
 │   ├── __init__.py        # public API
 │   ├── __main__.py        # `python -m promptsmith`
-│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/diff/report/improve/save/library/tokens/cost/check/export)
+│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/diff/report/improve/save/library/tokens/cost/check/export/init)
 │   ├── check.py           # `promptsmith check` — re-score the library, flag regressions
 │   ├── cost.py            # `promptsmith cost` — offline API cost estimates (11-model price snapshot)
 │   ├── diff.py            # `promptsmith diff` + `--diff` — word-level change diffs, stdlib difflib
 │   ├── export.py          # `promptsmith export` — library to Markdown/JSON
+│   ├── init.py            # `promptsmith init` — project folder with demo seeds + PROMPTS.md cheatsheet
 │   ├── tokens.py          # offline token estimation + context-window share
 │   ├── classifier.py      # Naive Bayes intent classifier, from scratch (+0.35 fallback)
 │   ├── compare.py         # `promptsmith compare` — head-to-head, per-check deltas
@@ -576,7 +608,7 @@ promptsmith/
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 122 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export)
+│   └── test_promptsmith.py  # 130 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

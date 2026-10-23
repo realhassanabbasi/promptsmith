@@ -10,6 +10,8 @@ import unittest
 from promptsmith.classifier import load_default
 from promptsmith.compare import compare_prompts
 from promptsmith.enhancer import enhance, ROLES
+from promptsmith.init import init_project
+from promptsmith.library import load_library
 from promptsmith.scorer import grade, score_prompt
 from promptsmith.skills import render_skill, write_skill
 from promptsmith.templates import names, placeholders, render
@@ -305,9 +307,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_14_0(self):
+    def test_version_is_1_15_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.14.0")
+        self.assertEqual(promptsmith.__version__, "1.15.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -1241,6 +1243,96 @@ class TestExport(unittest.TestCase):
         self.assertTrue(os.path.isfile("lib.md"))
         with open("lib.md", encoding="utf-8") as f:
             self.assertIn("## py-help", f.read())
+
+
+class TestInit(unittest.TestCase):
+    def _tmp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        return tmp.name
+
+    def _run(self, argv):
+        from promptsmith.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(argv)
+        return buf.getvalue()
+
+    def test_init_creates_project_structure(self):
+        target = os.path.join(self._tmp(), "proj")
+        r = init_project(target)
+        self.assertEqual(r["status"], "created")
+        self.assertTrue(os.path.isdir(os.path.join(target, ".promptsmith")))
+        self.assertTrue(os.path.isfile(os.path.join(target, "PROMPTS.md")))
+        self.assertTrue(os.path.isfile(os.path.join(target, ".promptsmith", "library.jsonl")))
+        self.assertTrue(os.path.isfile(os.path.join(target, ".promptsmith", "history.jsonl")))
+
+    def test_seed_scores_are_real(self):
+        target = os.path.join(self._tmp(), "proj")
+        r = init_project(target)
+        self.assertEqual(len(r["seeds"]), 2)
+        for seed in r["seeds"]:
+            # stored score must be the real scorer output — for the enhanced
+            # seed that means the improved text's score, not the raw prompt's
+            scored_text = seed["enhanced"] if seed["enhanced"] else seed["prompt"]
+            total, _bd, _fb = score_prompt(scored_text)
+            self.assertEqual(seed["score"], total)
+        by_name = {s["name"]: s for s in r["seeds"]}
+        self.assertEqual(by_name["demo-rough"]["grade"], "weak")
+        self.assertIsNotNone(by_name["demo-engineered"]["enhanced"])
+        self.assertEqual(by_name["demo-engineered"]["before_score"],
+                         by_name["demo-rough"]["score"])
+
+    def test_init_again_without_force_refuses(self):
+        target = os.path.join(self._tmp(), "proj")
+        init_project(target)
+        r = init_project(target)
+        self.assertEqual(r["status"], "already")
+        self.assertEqual(r["files"], [])
+        # library still has exactly the two seeds — nothing duplicated
+        self.assertEqual(len(load_library(cwd=target)), 2)
+
+    def test_force_tops_up_missing_pieces(self):
+        target = os.path.join(self._tmp(), "proj")
+        init_project(target)
+        os.remove(os.path.join(target, "PROMPTS.md"))
+        r = init_project(target, force=True)
+        self.assertEqual(r["status"], "topped-up")
+        self.assertTrue(os.path.isfile(os.path.join(target, "PROMPTS.md")))
+        # seeds are idempotent — no duplicates on top-up
+        self.assertEqual(len(load_library(cwd=target)), 2)
+
+    def test_bare_creates_only_psdir(self):
+        target = os.path.join(self._tmp(), "proj")
+        r = init_project(target, bare=True)
+        self.assertTrue(os.path.isdir(os.path.join(target, ".promptsmith")))
+        self.assertFalse(os.path.isfile(os.path.join(target, "PROMPTS.md")))
+        self.assertEqual(r["seeds"], [])
+        self.assertEqual(load_library(cwd=target), [])
+
+    def test_cli_init_text_output(self):
+        target = os.path.join(self._tmp(), "proj")
+        out = self._run(["init", target])
+        self.assertIn("PromptSmith project ready", out)
+        self.assertIn("demo-rough", out)
+        self.assertIn("demo-engineered", out)
+        self.assertIn("promptsmith save", out)
+
+    def test_cli_init_json_schema(self):
+        target = os.path.join(self._tmp(), "proj")
+        out = self._run(["init", target, "--json"])
+        payload = json.loads(out)
+        self.assertEqual(payload["status"], "created")
+        self.assertIn(".promptsmith/library.jsonl", payload["files"])
+        self.assertEqual(len(payload["seeds"]), 2)
+        self.assertNotIn("enhanced", payload["seeds"][0])  # slimmed schema
+        self.assertEqual(payload["seeds"][1]["score"], 92)
+
+    def test_cli_init_already_message(self):
+        target = os.path.join(self._tmp(), "proj")
+        self._run(["init", target])
+        out = self._run(["init", target])
+        self.assertIn("already a PromptSmith project", out)
 
 
 if __name__ == "__main__":

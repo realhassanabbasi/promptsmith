@@ -11,6 +11,7 @@ from .compare import compare_prompts
 from .cost import MODEL_PRICES, cost_report
 from .diff import diff_payload, diff_stats, render_diff
 from .export import export_json, export_markdown
+from .importing import import_file
 from .history import load_history, log_score, trend, verdict
 from .improve import improve_prompt, what_improved
 from .init import init_project
@@ -535,6 +536,28 @@ def cmd_export(args):
     print(out)
 
 
+def cmd_import(args):
+    try:
+        report = import_file(args.file)
+    except FileNotFoundError:
+        print(f"No such file: {args.file}")
+        sys.exit(1)
+    except ValueError as e:
+        print(f"Import refused: {e}")
+        sys.exit(1)
+    if args.json:
+        print(json.dumps(report, indent=2))
+        return
+    if report["imported"] == 0:
+        print(f"Nothing new to import "
+              f"({report['skipped']} skipped as duplicates).")
+        return
+    names = ", ".join(report["names"])
+    print(f"Imported {report['imported']} prompt version(s) "
+          f"into: {names} "
+          f"({report['skipped']} skipped as duplicates).")
+
+
 def cmd_init(args):
     result = init_project(args.dir, bare=args.bare, force=args.force)
     if args.json:
@@ -709,6 +732,12 @@ def build_parser():
     ex.add_argument("-o", "--output", default=None,
                     help="Write to FILE instead of stdout")
     ex.set_defaults(func=cmd_export)
+
+    im = sub.add_parser("import", help="Import a promptsmith JSON export into the library")
+    im.add_argument("file", help="JSON file from `promptsmith export --format json`")
+    im.add_argument("--json", action="store_true",
+                    help="Print the import report as machine-readable JSON")
+    im.set_defaults(func=cmd_import)
 
     ni = sub.add_parser("init", help="Start a PromptSmith project folder with demo prompts")
     ni.add_argument("dir", nargs="?", default=".",

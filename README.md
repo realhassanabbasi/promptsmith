@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Deps](https://img.shields.io/badge/dependencies-zero-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-130%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-138%20passing-brightgreen?style=flat-square)
 [![Live demo](https://img.shields.io/badge/demo-live%20in%20browser-black?style=flat-square)](https://realhassanabbasi.github.io/promptsmith/)
 
 **Turn rough prompts into engineered ones.** Paste in *"help me with python"*, get back a structured prompt with a role, context slots, requirements, output format, and guardrails — scored before and after. Works **offline**, with **zero dependencies**.
@@ -29,6 +29,7 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 - **`library`** — save named prompts as versioned library entries (`save NAME "prompt"`; `--improve` saves the enhanced version too): `library` lists each name's versions/last/best, `library NAME` shows its full version history — your best-scoring prompt is always one glance away (`--tags`, `--json`)
 - **`check`** — regression guard for your saved library: re-scores every prompt against its recorded best and flags regressions (rubric upgrades can't silently change what your prompts score); `--fail-on-regression` exits 1 for CI, `--json` for dashboards
 - **`export`** — share your prompt library: `export` prints it as Markdown (one section per prompt, versions with scores and improved text), `--format json` for machine-readable output, `-o FILE` to write to a file, `export NAME` for a single prompt
+- **`import`** — bring a shared library back in: `import FILE` reads a `export --format json` file into your library — scores preserved exactly as exported, duplicates skipped (never doubled), existing names continue their version numbers (`--json` for scripts)
 - **`tokens`** — estimate token count and context-window share for any prompt: `tokens "prompt"` prints ~tokens, words, chars, and % of the model's window used (`--model` to pick the model, `--json` for scripts)
 - **`templates`** — 8 fill-in-the-blank templates (debug code, explain concepts, learn vocabulary, study plans…)
 - **`interactive`** — guided Q&A that builds your prompt with you
@@ -85,6 +86,10 @@ promptsmith check --fail-on-regression   # for CI: exits 1 on any regression
 promptsmith export
 promptsmith export -o library.md
 promptsmith export --format json
+
+# bring a teammate's shared library back into yours
+promptsmith import shared.json
+promptsmith import shared.json --json
 
 # guided mode
 promptsmith interactive
@@ -447,6 +452,31 @@ $ promptsmith export --format json | head -12
 stdout. The Markdown is ready to paste into docs or share with a team;
 the JSON has the full version history for scripts and backups.
 
+## Import
+
+Real output — the round trip: a teammate exports, you import, nothing
+gets doubled:
+
+```
+$ promptsmith import shared.json
+Imported 1 prompt version(s) into: py-help (0 skipped as duplicates).
+
+$ promptsmith import shared.json
+Nothing new to import (1 skipped as duplicates).
+
+$ promptsmith library
+
+Prompt library — 1 version(s), 1 prompt(s) saved
+
+  name                      ver last best    Δ  tags
+  py-help                     1   37   37   +0▬  —
+```
+
+Import keeps the exported scores exactly (the point of sharing is proven
+prompts, not re-scoring them), continues version numbers for names you
+already have, and refuses anything that is not a promptsmith export —
+no half-imports, no silent overwrites.
+
 ## Agent skill export
 
 Coding agents (Claude Code, Codex, Cursor) can use PromptSmith's rubric
@@ -589,12 +619,13 @@ promptsmith/
 ├── promptsmith/
 │   ├── __init__.py        # public API
 │   ├── __main__.py        # `python -m promptsmith`
-│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/diff/report/improve/save/library/tokens/cost/check/export/init)
+│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/diff/report/improve/save/library/tokens/cost/check/export/init/import)
 │   ├── check.py           # `promptsmith check` — re-score the library, flag regressions
 │   ├── cost.py            # `promptsmith cost` — offline API cost estimates (11-model price snapshot)
 │   ├── diff.py            # `promptsmith diff` + `--diff` — word-level change diffs, stdlib difflib
 │   ├── export.py          # `promptsmith export` — library to Markdown/JSON
 │   ├── init.py            # `promptsmith init` — project folder with demo seeds + PROMPTS.md cheatsheet
+│   ├── importing.py       # `promptsmith import` — shared JSON export back into the library (scores kept, duplicates skipped)
 │   ├── tokens.py          # offline token estimation + context-window share
 │   ├── classifier.py      # Naive Bayes intent classifier, from scratch (+0.35 fallback)
 │   ├── compare.py         # `promptsmith compare` — head-to-head, per-check deltas
@@ -608,7 +639,7 @@ promptsmith/
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 130 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init)
+│   └── test_promptsmith.py  # 138 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

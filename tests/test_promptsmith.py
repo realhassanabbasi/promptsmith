@@ -307,9 +307,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_15_0(self):
+    def test_version_is_1_16_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.15.0")
+        self.assertEqual(promptsmith.__version__, "1.16.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -1333,6 +1333,112 @@ class TestInit(unittest.TestCase):
         self._run(["init", target])
         out = self._run(["init", target])
         self.assertIn("already a PromptSmith project", out)
+
+
+class TestImport(unittest.TestCase):
+    WEAK = "help me with python"
+
+    def _tmp_cwd(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        prev = os.getcwd()
+        os.chdir(tmp.name)
+        self.addCleanup(os.chdir, prev)
+
+    def _run(self, argv):
+        from promptsmith.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(argv)
+        return buf.getvalue()
+
+    def _export_file(self):
+        from promptsmith.export import export_json
+        from promptsmith.library import save_entry
+        self._tmp_cwd()
+        save_entry("py-help", self.WEAK)
+        save_entry("py-help", "help me with python 3", enhance_it=True)
+        path = os.path.join(os.getcwd(), "shared.json")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(export_json())
+        return path
+
+    def test_roundtrip_preserves_scores_and_versions(self):
+        from promptsmith.importing import import_file
+        from promptsmith.library import load_library
+        path = self._export_file()
+        self._tmp_cwd()
+        report = import_file(path)
+        self.assertEqual(report["imported"], 2)
+        self.assertEqual(report["skipped"], 0)
+        records = load_library()
+        self.assertEqual([r["version"] for r in records], [1, 2])
+        self.assertEqual(records[0]["score"], 37)
+        self.assertGreater(records[1]["score"], records[0]["score"])
+        self.assertIsNotNone(records[1]["enhanced"])
+
+    def test_second_import_skips_duplicates(self):
+        from promptsmith.importing import import_file
+        path = self._export_file()
+        self._tmp_cwd()
+        import_file(path)
+        report = import_file(path)
+        self.assertEqual(report["imported"], 0)
+        self.assertEqual(report["skipped"], 2)
+
+    def test_version_continues_after_existing(self):
+        from promptsmith.importing import import_file
+        from promptsmith.library import load_library, save_entry
+        path = self._export_file()
+        self._tmp_cwd()
+        save_entry("py-help", "an unrelated saved prompt")
+        report = import_file(path)
+        self.assertEqual(report["imported"], 2)
+        versions = [r["version"] for r in load_library()]
+        self.assertEqual(versions, [1, 2, 3])
+
+    def test_non_promptsmith_export_refused(self):
+        from promptsmith.importing import import_payload
+        self._tmp_cwd()
+        with self.assertRaises(ValueError):
+            import_payload({"tool": "other-tool", "prompts": []})
+        with self.assertRaises(ValueError):
+            import_payload({"tool": "promptsmith"})
+
+    def test_malformed_json_file_refused(self):
+        from promptsmith.importing import import_file
+        self._tmp_cwd()
+        with open("bad.json", "w", encoding="utf-8") as f:
+            f.write("{not json")
+        with self.assertRaises(ValueError):
+            import_file("bad.json")
+
+    def test_cli_import_text_and_json(self):
+        from promptsmith.library import load_library
+        path = self._export_file()
+        self._tmp_cwd()
+        out = self._run(["import", path])
+        self.assertIn("Imported 2 prompt version(s)", out)
+        self.assertIn("py-help", out)
+        self.assertEqual(len(load_library()), 2)
+        out = self._run(["import", path, "--json"])
+        data = json.loads(out)
+        self.assertEqual(data["imported"], 0)
+        self.assertEqual(data["skipped"], 2)
+
+    def test_cli_import_missing_file_exits_1(self):
+        from promptsmith.cli import main
+        self._tmp_cwd()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            with self.assertRaises(SystemExit) as cm:
+                main(["import", "nope.json"])
+        self.assertEqual(cm.exception.code, 1)
+        self.assertIn("No such file", buf.getvalue())
+
+    def test_skill_mentions_import(self):
+        md = render_skill()
+        self.assertIn("`import`", md)
 
 
 if __name__ == "__main__":

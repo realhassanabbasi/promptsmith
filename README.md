@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Deps](https://img.shields.io/badge/dependencies-zero-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-138%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-146%20passing-brightgreen?style=flat-square)
 [![Live demo](https://img.shields.io/badge/demo-live%20in%20browser-black?style=flat-square)](https://realhassanabbasi.github.io/promptsmith/)
 
 **Turn rough prompts into engineered ones.** Paste in *"help me with python"*, get back a structured prompt with a role, context slots, requirements, output format, and guardrails — scored before and after. Works **offline**, with **zero dependencies**.
@@ -26,6 +26,7 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 - **`compare`** — put two prompt versions head-to-head: scores, per-check deltas, a winner verdict, and what the loser should fix first (`--json` for scripts)
 - **`diff`** — show exactly what changed, word by word: `diff A.txt B.txt` on its own, or `--diff` on `enhance` and `compare` so a score gain is backed by visible edits (`--json` for scripts)
 - **`history`** — log scored runs (`score`/`compare --log`) and print per-prompt trend reports (`report`): runs, averages, sparklines, and an improving/steady/slipping verdict (`--json` for dashboards)
+- **`stats`** — the whole picture in one glance: total runs and prompts tracked, average/best/worst score, per-intent averages, and library totals (names, versions, best prompt) — `report` shows trends per prompt, `stats` shows the project (`--json` for dashboards)
 - **`library`** — save named prompts as versioned library entries (`save NAME "prompt"`; `--improve` saves the enhanced version too): `library` lists each name's versions/last/best, `library NAME` shows its full version history — your best-scoring prompt is always one glance away (`--tags`, `--json`)
 - **`check`** — regression guard for your saved library: re-scores every prompt against its recorded best and flags regressions (rubric upgrades can't silently change what your prompts score); `--fail-on-regression` exits 1 for CI, `--json` for dashboards
 - **`export`** — share your prompt library: `export` prints it as Markdown (one section per prompt, versions with scores and improved text), `--format json` for machine-readable output, `-o FILE` to write to a file, `export NAME` for a single prompt
@@ -58,6 +59,9 @@ promptsmith improve "help me with python" --diff   # also shows the word-level c
 # score a whole list at once (one prompt per line)
 promptsmith batch my_prompts.txt
 promptsmith batch my_prompts.txt --enhance   # also enhances each, saves my_prompts.txt.enhanced.md
+
+# project totals across history and library
+promptsmith stats
 
 # machine-readable output for scripts and pipelines
 promptsmith score "help me with python" --json
@@ -368,6 +372,27 @@ answer to "are my prompts getting better?" `compare --log` logs both
 versions. Records live in `.promptsmith/history.jsonl` (git-ignored), and
 `report --json` gives the same table as JSON for dashboards.
 
+## Project stats
+
+Real output — `report` shows trends per prompt; `stats` shows the whole project:
+
+```
+$ promptsmith stats
+
+Project stats
+
+  Score history — 2 runs, 2 prompt(s) tracked
+    average 47.5   best 58 (Write a Python function that sorts a lis…)   worst 37 (help me with python)
+    code: 2 runs, avg 47.5
+  Library — 3 name(s), 3 version(s)
+    best 92 (demo-engineered)
+```
+
+`score --log` and `compare --log` now record each run's intent, so the
+per-intent lines only cover runs logged with this version — older records
+(with no intent stored) are counted in the totals but not in any intent row.
+`stats --json` gives the same totals as JSON for dashboards.
+
 ## Prompt library
 
 Real output — save prompts by name; re-saving adds a version:
@@ -575,8 +600,9 @@ More pairs in [`examples/before_after.md`](examples/before_after.md).
                         |      cli.py      |  argparse: score / enhance / batch /
                         +--------+---------+    templates / interactive /
                                  |                skill / compare / diff / report /
-                                                  improve / save / library /
-                                                  tokens / cost / check
+                                                  stats / improve / save / library /
+                                                  tokens / cost / check / export /
+                                                  import / init
             +--------------------+--------------------+
             |                    |                    |
      +------v------+      +------v------+      +------v------+
@@ -619,7 +645,7 @@ promptsmith/
 ├── promptsmith/
 │   ├── __init__.py        # public API
 │   ├── __main__.py        # `python -m promptsmith`
-│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/diff/report/improve/save/library/tokens/cost/check/export/init/import)
+│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/diff/report/stats/improve/save/library/tokens/cost/check/export/init/import)
 │   ├── check.py           # `promptsmith check` — re-score the library, flag regressions
 │   ├── cost.py            # `promptsmith cost` — offline API cost estimates (11-model price snapshot)
 │   ├── diff.py            # `promptsmith diff` + `--diff` — word-level change diffs, stdlib difflib
@@ -635,11 +661,12 @@ promptsmith/
 │   ├── library.py         # `promptsmith save` + `promptsmith library` — versioned prompt library
 │   ├── scorer.py          # 5-check rubric, 0-100
 │   ├── skills.py          # `promptsmith skill` — renders an installable agent skill (rubric + improvement loop)
+│   ├── stats.py           # `promptsmith stats` — project totals across history + library
 │   ├── templates.py       # 8 ready-made templates
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 138 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import)
+│   └── test_promptsmith.py  # 146 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

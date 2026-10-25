@@ -18,6 +18,7 @@ from .init import init_project
 from .library import entries_for, library_path, load_library, save_entry, summarize
 from .scorer import grade, score_prompt
 from .skills import SKILL_NAME, render_skill, write_skill
+from .stats import stats_payload
 from .templates import TEMPLATES, names, placeholders, render
 from .tokens import estimate_tokens, token_report
 from .cost import MODEL_PRICES, cost_report
@@ -49,8 +50,9 @@ def _score_payload(prompt):
 def cmd_score(args):
     payload = _score_payload(args.prompt)
     if args.log:
+        intent, _ = predict_intent(args.prompt)
         log_score(payload["prompt"], payload["score"],
-                  payload["grade"], payload["breakdown"])
+                  payload["grade"], payload["breakdown"], intent=intent)
     if args.json:
         print(json.dumps(payload, indent=2))
         return
@@ -202,10 +204,12 @@ def cmd_compare(args):
         sys.exit(1)
     result = compare_prompts(a, b)
     if args.log:
+        intent_a, _ = predict_intent(a)
+        intent_b, _ = predict_intent(b)
         log_score(a, result["a"]["score"], result["a"]["grade"],
-                  result["a"]["breakdown"])
+                  result["a"]["breakdown"], intent=intent_a)
         log_score(b, result["b"]["score"], result["b"]["grade"],
-                  result["b"]["breakdown"])
+                  result["b"]["breakdown"], intent=intent_b)
     if args.json:
         print(json.dumps(result, indent=2))
         return
@@ -321,6 +325,30 @@ def cmd_report(args):
         print(f"  {short:42} {r['runs']:>4} {r['average']:>5.1f} "
               f"{r['best']:>4} {r['last']:>4} {r['delta']:>+4}  "
               f"{r['spark']:6}  {v} {arrows[v]}")
+    print()
+
+
+def cmd_stats(args):
+    """One global view: history totals + library totals."""
+    payload = stats_payload()
+    if not payload["has_data"]:
+        print("No data yet — run `promptsmith score \"...\" --log` or "
+              "`promptsmith save NAME \"...\"` to start tracking.")
+        return
+    if args.json:
+        print(json.dumps(payload, indent=2))
+        return
+    h, lib = payload["history"], payload["library"]
+    print(f"\n{bold('Project stats')}\n")
+    print(f"  Score history — {h['runs']} runs, {h['prompts']} prompt(s) tracked")
+    if h["runs"]:
+        print(f"    average {h['average']:.1f}   best {h['best']} "
+              f"({h['best_prompt']})   worst {h['worst']} ({h['worst_prompt']})")
+        for intent, row in h["by_intent"].items():
+            print(f"    {intent}: {row['runs']} runs, avg {row['average']:.1f}")
+    print(f"  Library — {lib['names']} name(s), {lib['versions']} version(s)")
+    if lib["names"]:
+        print(f"    best {lib['best']} ({lib['best_name']})")
     print()
 
 
@@ -657,6 +685,11 @@ def build_parser():
     r.add_argument("--json", action="store_true",
                    help="Print the trend table as machine-readable JSON")
     r.set_defaults(func=cmd_report)
+
+    st = sub.add_parser("stats", help="Show project totals across history and library")
+    st.add_argument("--json", action="store_true",
+                    help="Print the totals as machine-readable JSON")
+    st.set_defaults(func=cmd_stats)
 
     m = sub.add_parser("improve", help="Score, enhance and re-score one prompt")
     m.add_argument("prompt", help="The prompt text in quotes")

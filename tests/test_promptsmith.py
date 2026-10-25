@@ -307,9 +307,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_16_0(self):
+    def test_version_is_1_17_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.16.0")
+        self.assertEqual(promptsmith.__version__, "1.17.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -1439,6 +1439,109 @@ class TestImport(unittest.TestCase):
     def test_skill_mentions_import(self):
         md = render_skill()
         self.assertIn("`import`", md)
+
+
+class TestStats(unittest.TestCase):
+    def _tmp_cwd(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        prev = os.getcwd()
+        os.chdir(tmp.name)
+        self.addCleanup(os.chdir, prev)
+
+    def test_empty_payload(self):
+        from promptsmith.stats import stats_payload
+        self._tmp_cwd()
+        p = stats_payload()
+        self.assertFalse(p["has_data"])
+        self.assertEqual(p["history"]["runs"], 0)
+        self.assertEqual(p["history"]["average"], None)
+        self.assertEqual(p["library"]["names"], 0)
+        self.assertEqual(p["library"]["best"], None)
+
+    def test_history_aggregates(self):
+        from promptsmith.history import log_score
+        from promptsmith.stats import stats_payload
+        self._tmp_cwd()
+        log_score("p1", 30, intent="learn")
+        log_score("p1", 50, intent="learn")
+        log_score("p2", 80, intent="code")
+        h = stats_payload()["history"]
+        self.assertEqual(h["runs"], 3)
+        self.assertEqual(h["prompts"], 2)
+        self.assertEqual(h["average"], 53.3)
+        self.assertEqual(h["best"], 80)
+        self.assertEqual(h["best_prompt"], "p2")
+        self.assertEqual(h["worst"], 30)
+        self.assertEqual(h["worst_prompt"], "p1")
+        self.assertEqual(h["by_intent"]["learn"], {"runs": 2, "average": 40.0})
+        self.assertEqual(h["by_intent"]["code"], {"runs": 1, "average": 80.0})
+
+    def test_library_aggregates(self):
+        from promptsmith.stats import stats_payload
+        self._tmp_cwd()
+        os.makedirs(".promptsmith", exist_ok=True)
+        with open(".promptsmith/library.jsonl", "w", encoding="utf-8") as f:
+            f.write('{"name": "good", "version": 1, "score": 80}\n')
+            f.write('{"name": "good", "version": 2, "score": 90}\n')
+            f.write('{"name": "other", "version": 1, "score": 70}\n')
+        lib = stats_payload()["library"]
+        self.assertEqual(lib["names"], 2)
+        self.assertEqual(lib["versions"], 3)
+        self.assertEqual(lib["best"], 90)
+        self.assertEqual(lib["best_name"], "good")
+
+    def test_cli_text(self):
+        from promptsmith.cli import main
+        from promptsmith.history import log_score
+        self._tmp_cwd()
+        log_score("p1", 30, intent="learn")
+        log_score("p2", 80, intent="code")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(["stats"])
+        out = buf.getvalue()
+        self.assertIn("Project stats", out)
+        self.assertIn("2 runs", out)
+        self.assertIn("best 80", out)
+        self.assertIn("worst 30", out)
+
+    def test_cli_json_schema(self):
+        from promptsmith.cli import main
+        from promptsmith.history import log_score
+        self._tmp_cwd()
+        log_score("p1", 30)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(["stats", "--json"])
+        data = json.loads(buf.getvalue())
+        self.assertEqual(set(data.keys()), {"history", "library", "has_data"})
+        self.assertTrue(data["has_data"])
+        self.assertEqual(data["history"]["runs"], 1)
+
+    def test_cli_empty_message(self):
+        from promptsmith.cli import main
+        self._tmp_cwd()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(["stats"])
+        self.assertIn("No data yet", buf.getvalue())
+
+    def test_skill_mentions_stats(self):
+        md = render_skill()
+        self.assertIn("`stats`", md)
+
+    def test_score_log_records_intent(self):
+        from promptsmith.cli import main
+        from promptsmith.history import load_history
+        self._tmp_cwd()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(["score", "help me with python", "--log"])
+        recs = load_history()
+        self.assertEqual(len(recs), 1)
+        self.assertIsInstance(recs[0]["intent"], str)
+        self.assertTrue(recs[0]["intent"])
 
 
 if __name__ == "__main__":

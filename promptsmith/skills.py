@@ -92,7 +92,7 @@ def _workflow_section():
         "Run the guard in CI so regressions block automatically.\n\n"
         "With the PromptSmith CLI installed, start with `init` (a project folder with two worked demo prompts), then the loop maps to commands: "
         "`score` → `improve` → `compare` (+`diff` for the word changes) → "
-        "`save` / `library` → `report` → `check` (the regression guard) → "
+        "`save` / `library` → `report` → `stats` (the whole picture: totals across history and library) → `check` (the regression guard) → "
         "`export` (share the library as Markdown or JSON) → "
         "`import` (bring a shared JSON export back in — duplicates skipped, "
         "scores preserved). "

@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Deps](https://img.shields.io/badge/dependencies-zero-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-146%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-156%20passing-brightgreen?style=flat-square)
 [![Live demo](https://img.shields.io/badge/demo-live%20in%20browser-black?style=flat-square)](https://realhassanabbasi.github.io/promptsmith/)
 
 **Turn rough prompts into engineered ones.** Paste in *"help me with python"*, get back a structured prompt with a role, context slots, requirements, output format, and guardrails — scored before and after. Works **offline**, with **zero dependencies**.
@@ -31,6 +31,7 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 - **`check`** — regression guard for your saved library: re-scores every prompt against its recorded best and flags regressions (rubric upgrades can't silently change what your prompts score); `--fail-on-regression` exits 1 for CI, `--json` for dashboards
 - **`export`** — share your prompt library: `export` prints it as Markdown (one section per prompt, versions with scores and improved text), `--format json` for machine-readable output, `-o FILE` to write to a file, `export NAME` for a single prompt
 - **`import`** — bring a shared library back in: `import FILE` reads a `export --format json` file into your library — scores preserved exactly as exported, duplicates skipped (never doubled), existing names continue their version numbers (`--json` for scripts)
+- **`rollback`** — restore any saved version as a new version: `rollback NAME` brings back the previous version, `rollback NAME --to 2` restores version 2 — history is never rewritten, so a rollback is always undoable, and the restored prompt is scored fresh under the current rubric (`--json` for scripts)
 - **`tokens`** — estimate token count and context-window share for any prompt: `tokens "prompt"` prints ~tokens, words, chars, and % of the model's window used (`--model` to pick the model, `--json` for scripts)
 - **`templates`** — 8 fill-in-the-blank templates (debug code, explain concepts, learn vocabulary, study plans…)
 - **`interactive`** — guided Q&A that builds your prompt with you
@@ -94,6 +95,10 @@ promptsmith export --format json
 # bring a teammate's shared library back into yours
 promptsmith import shared.json
 promptsmith import shared.json --json
+
+# a rewrite turned out worse? bring a saved version back as a new version
+promptsmith rollback py-help            # previous version becomes the new latest
+promptsmith rollback py-help --to 1     # or pick the exact version
 
 # guided mode
 promptsmith interactive
@@ -502,6 +507,38 @@ prompts, not re-scoring them), continues version numbers for names you
 already have, and refuses anything that is not a promptsmith export —
 no half-imports, no silent overwrites.
 
+## Rollback
+
+Real output — the mechanism, shown on a two-version library: the
+previous version comes back as a new version, history untouched. (In
+real use you roll back when a rewrite turns out worse than the version
+it replaced — here v2 happens to score higher, so this demo shows the
+mechanism, not a rescue.)
+
+```
+$ promptsmith library py-help
+
+py-help — 2 version(s)
+
+  ver score grade     saved
+  v1   37/100 (weak    ) 2026-10-26
+       "help me with python"
+  v2   45/100 (weak    ) 2026-10-26
+       "help me with python 3 and pip"
+
+$ promptsmith rollback py-help
+
+Rolled back: py-help v1 → v3 — 37/100 (weak)
+  "help me with python"
+Library: /tmp/rb-demo/.promptsmith/library.jsonl
+```
+
+`rollback NAME --to N` restores exactly version N; rolling back to
+the version you are already on, or to a version that does not exist, is
+refused instead of silently duplicating. The restored version keeps the
+original's tags and is scored fresh under the current rubric, so a
+rollback after a rubric upgrade tells you what the old prompt scores now.
+
 ## Agent skill export
 
 Coding agents (Claude Code, Codex, Cursor) can use PromptSmith's rubric
@@ -601,8 +638,8 @@ More pairs in [`examples/before_after.md`](examples/before_after.md).
                         +--------+---------+    templates / interactive /
                                  |                skill / compare / diff / report /
                                                   stats / improve / save / library /
-                                                  tokens / cost / check / export /
-                                                  import / init
+                                                  rollback / tokens / cost / check /
+                                                  export / import / init
             +--------------------+--------------------+
             |                    |                    |
      +------v------+      +------v------+      +------v------+
@@ -645,7 +682,7 @@ promptsmith/
 ├── promptsmith/
 │   ├── __init__.py        # public API
 │   ├── __main__.py        # `python -m promptsmith`
-│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/diff/report/stats/improve/save/library/tokens/cost/check/export/init/import)
+│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/diff/report/stats/improve/save/library/rollback/tokens/cost/check/export/init/import)
 │   ├── check.py           # `promptsmith check` — re-score the library, flag regressions
 │   ├── cost.py            # `promptsmith cost` — offline API cost estimates (11-model price snapshot)
 │   ├── diff.py            # `promptsmith diff` + `--diff` — word-level change diffs, stdlib difflib
@@ -659,6 +696,7 @@ promptsmith/
 │   ├── history.py         # `score/compare --log` + `promptsmith report` — score history & trends
 │   ├── improve.py         # `promptsmith improve` — score, enhance, re-score in one step
 │   ├── library.py         # `promptsmith save` + `promptsmith library` — versioned prompt library
+│   ├── rollback.py        # `promptsmith rollback` — restore any saved version as a new version
 │   ├── scorer.py          # 5-check rubric, 0-100
 │   ├── skills.py          # `promptsmith skill` — renders an installable agent skill (rubric + improvement loop)
 │   ├── stats.py           # `promptsmith stats` — project totals across history + library
@@ -666,7 +704,7 @@ promptsmith/
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 146 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats)
+│   └── test_promptsmith.py  # 156 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

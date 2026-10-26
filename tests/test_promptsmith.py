@@ -307,9 +307,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_17_0(self):
+    def test_version_is_1_18_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.17.0")
+        self.assertEqual(promptsmith.__version__, "1.18.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -1542,6 +1542,123 @@ class TestStats(unittest.TestCase):
         self.assertEqual(len(recs), 1)
         self.assertIsInstance(recs[0]["intent"], str)
         self.assertTrue(recs[0]["intent"])
+
+
+class TestRollback(unittest.TestCase):
+    def _tmp_cwd(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        prev = os.getcwd()
+        os.chdir(tmp.name)
+        self.addCleanup(os.chdir, prev)
+
+    def _run(self, argv):
+        from promptsmith.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(argv)
+        return buf.getvalue()
+
+    def test_default_rolls_back_to_previous_version(self):
+        from promptsmith.library import save_entry, entries_for
+        from promptsmith.rollback import rollback_entry
+        self._tmp_cwd()
+        v1 = save_entry("py-help", "help me with python")
+        save_entry("py-help", "help me with python 3 and pip")
+        result = rollback_entry("py-help")
+        self.assertEqual(result["from_version"], 1)
+        self.assertEqual(result["to_version"], 3)
+        self.assertEqual(result["restored"], "help me with python")
+        self.assertEqual(result["score"], v1["score"])
+        self.assertEqual(entries_for("py-help")[-1]["prompt"],
+                         "help me with python")
+
+    def test_to_specific_version(self):
+        from promptsmith.library import save_entry, entries_for
+        from promptsmith.rollback import rollback_entry
+        self._tmp_cwd()
+        save_entry("py-help", "help me with python")
+        save_entry("py-help", "help me with python 3")
+        save_entry("py-help", "help me with python 3 and pip")
+        result = rollback_entry("py-help", version=2)
+        self.assertEqual(result["from_version"], 2)
+        self.assertEqual(result["to_version"], 4)
+        self.assertEqual(entries_for("py-help")[-1]["prompt"],
+                         "help me with python 3")
+
+    def test_restores_enhanced_keeper_not_original(self):
+        from promptsmith.library import save_entry, entries_for
+        from promptsmith.rollback import rollback_entry
+        self._tmp_cwd()
+        rec = save_entry("py-help", "help me with python", enhance_it=True)
+        self.assertTrue(rec["enhanced"])
+        save_entry("py-help", "help me with python 3 and pip")
+        result = rollback_entry("py-help")
+        self.assertEqual(result["restored"], rec["enhanced"])
+
+    def test_tags_carry_over(self):
+        from promptsmith.library import save_entry, entries_for
+        from promptsmith.rollback import rollback_entry
+        self._tmp_cwd()
+        save_entry("py-help", "help me with python", tags=["coding"])
+        save_entry("py-help", "help me with python 3")
+        result = rollback_entry("py-help")
+        self.assertIn("coding", entries_for("py-help")[-1]["tags"])
+
+    def test_unknown_name_raises(self):
+        from promptsmith.rollback import rollback_entry
+        self._tmp_cwd()
+        with self.assertRaises(ValueError):
+            rollback_entry("nope")
+
+    def test_single_version_raises(self):
+        from promptsmith.library import save_entry
+        from promptsmith.rollback import rollback_entry
+        self._tmp_cwd()
+        save_entry("py-help", "help me with python")
+        with self.assertRaises(ValueError):
+            rollback_entry("py-help")
+
+    def test_to_latest_and_out_of_range_raise(self):
+        from promptsmith.library import save_entry
+        from promptsmith.rollback import rollback_entry
+        self._tmp_cwd()
+        save_entry("py-help", "help me with python")
+        save_entry("py-help", "help me with python 3")
+        with self.assertRaises(ValueError):
+            rollback_entry("py-help", version=2)
+        with self.assertRaises(ValueError):
+            rollback_entry("py-help", version=9)
+
+    def test_cli_text_and_json(self):
+        from promptsmith.cli import main
+        from promptsmith.library import save_entry
+        self._tmp_cwd()
+        save_entry("py-help", "help me with python")
+        save_entry("py-help", "help me with python 3 and pip")
+        out = self._run(["rollback", "py-help"])
+        self.assertIn("Rolled back", out)
+        self.assertIn("v1 → v3", out)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(["rollback", "py-help", "--json"])
+        data = json.loads(buf.getvalue())
+        self.assertEqual(data["from_version"], 2)
+        self.assertEqual(data["to_version"], 4)
+
+    def test_cli_unknown_name_exits_1(self):
+        from promptsmith.cli import main
+        self._tmp_cwd()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            with self.assertRaises(SystemExit) as cm:
+                main(["rollback", "nope"])
+        self.assertEqual(cm.exception.code, 1)
+        self.assertIn("Rollback refused", buf.getvalue())
+
+    def test_skill_mentions_rollback(self):
+        md = render_skill()
+        self.assertIn("`rollback`", md)
 
 
 if __name__ == "__main__":

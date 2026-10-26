@@ -93,6 +93,7 @@ def _workflow_section():
         "With the PromptSmith CLI installed, start with `init` (a project folder with two worked demo prompts), then the loop maps to commands: "
         "`score` → `improve` → `compare` (+`diff` for the word changes) → "
         "`save` / `library` → `report` → `stats` (the whole picture: totals across history and library) → `check` (the regression guard) → "
+        "`rollback` (restore any saved version as a new one — history is never rewritten) → "
         "`export` (share the library as Markdown or JSON) → "
         "`import` (bring a shared JSON export back in — duplicates skipped, "
         "scores preserved). "

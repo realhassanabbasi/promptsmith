@@ -16,6 +16,7 @@ from .history import load_history, log_score, trend, verdict
 from .improve import improve_prompt, what_improved
 from .init import init_project
 from .library import entries_for, library_path, load_library, save_entry, summarize
+from .rollback import rollback_entry
 from .scorer import grade, score_prompt
 from .skills import SKILL_NAME, render_skill, write_skill
 from .stats import stats_payload
@@ -419,6 +420,24 @@ def cmd_library(args):
     print()
 
 
+def cmd_rollback(args):
+    """Restore a saved version as a new version (history never rewritten)."""
+    try:
+        result = rollback_entry(args.name, version=args.to)
+    except ValueError as e:
+        print(f"Rollback refused: {e}")
+        sys.exit(1)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    short = result["restored"][:64] + ("…" if len(result["restored"]) > 64 else "")
+    print(f"\n{bold('Rolled back:')} {cyan(args.name)} "
+          f"v{result['from_version']} → v{result['to_version']} — "
+          f"{result['score']}/100 ({result['grade']})")
+    print(f"  \"{short}\"")
+    print(f"{bold('Library:')} {library_path()}\n")
+
+
 def cmd_check(args):
     """Re-score the saved library against its own history; flag regressions."""
     records = load_library()
@@ -720,6 +739,14 @@ def build_parser():
     lb.add_argument("--json", action="store_true",
                     help="Print as machine-readable JSON")
     lb.set_defaults(func=cmd_library)
+
+    rb = sub.add_parser("rollback", help="Restore a saved version as a new version")
+    rb.add_argument("name", help="Saved prompt name to roll back")
+    rb.add_argument("--to", type=int, default=None, metavar="VERSION",
+                    help="Version to restore (default: the previous version)")
+    rb.add_argument("--json", action="store_true",
+                    help="Print as machine-readable JSON")
+    rb.set_defaults(func=cmd_rollback)
 
     ck = sub.add_parser("check", help="Re-score the saved library; flag regressions")
     ck.add_argument("name", nargs="?", default=None,

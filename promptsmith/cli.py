@@ -17,6 +17,7 @@ from .improve import improve_prompt, what_improved
 from .init import init_project
 from .library import entries_for, library_path, load_library, save_entry, summarize
 from .rollback import rollback_entry
+from .search import search_library
 from .scorer import grade, score_prompt
 from .skills import SKILL_NAME, render_skill, write_skill
 from .stats import stats_payload
@@ -372,6 +373,30 @@ def cmd_save(args):
     if record["tags"]:
         print(f"{bold('Tags:')} {', '.join(record['tags'])}")
     print(f"{bold('Library:')} {library_path()}\n")
+
+
+def cmd_search(args):
+    """Find saved prompts by word or tag; one row per matching name."""
+    tags = [t.strip() for t in (args.tags.split(",") if args.tags else [])
+            if t.strip()]
+    rows = search_library(args.query, tags=tags)
+    if args.json:
+        print(json.dumps({"query": args.query, "tags": tags,
+                          "results": rows}, indent=2))
+        return
+    if not rows:
+        print(f"No saved prompts match \"{args.query}\".")
+        print("Run `promptsmith library` to see everything saved.")
+        return
+    print(f"\n{bold('Search results')} — {len(rows)} match(es) "
+          f"for \"{args.query}\"\n")
+    print(f"  {'name':24} {'ver':>4} {'last':>4} {'best':>4}  "
+          f"{'matched':8}  tags")
+    for r in rows:
+        tags_s = ", ".join(r["tags"]) or "—"
+        print(f"  {r['name'][:24]:24} {r['versions']:>4} {r['last']:>4} "
+              f"{r['best']:>4}  {', '.join(r['matched']):8}  {tags_s}")
+    print()
 
 
 def cmd_library(args):
@@ -747,6 +772,14 @@ def build_parser():
     rb.add_argument("--json", action="store_true",
                     help="Print as machine-readable JSON")
     rb.set_defaults(func=cmd_rollback)
+
+    se = sub.add_parser("search", help="Find saved prompts by word or tag")
+    se.add_argument("query", help="Word to search in names, prompt text, and tags")
+    se.add_argument("--tags", metavar="TAGS",
+                    help="Only names carrying one of these tags, e.g. --tags coding,debug")
+    se.add_argument("--json", action="store_true",
+                    help="Print as machine-readable JSON")
+    se.set_defaults(func=cmd_search)
 
     ck = sub.add_parser("check", help="Re-score the saved library; flag regressions")
     ck.add_argument("name", nargs="?", default=None,

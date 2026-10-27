@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Deps](https://img.shields.io/badge/dependencies-zero-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-156%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-166%20passing-brightgreen?style=flat-square)
 [![Live demo](https://img.shields.io/badge/demo-live%20in%20browser-black?style=flat-square)](https://realhassanabbasi.github.io/promptsmith/)
 
 **Turn rough prompts into engineered ones.** Paste in *"help me with python"*, get back a structured prompt with a role, context slots, requirements, output format, and guardrails — scored before and after. Works **offline**, with **zero dependencies**.
@@ -32,6 +32,7 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 - **`export`** — share your prompt library: `export` prints it as Markdown (one section per prompt, versions with scores and improved text), `--format json` for machine-readable output, `-o FILE` to write to a file, `export NAME` for a single prompt
 - **`import`** — bring a shared library back in: `import FILE` reads a `export --format json` file into your library — scores preserved exactly as exported, duplicates skipped (never doubled), existing names continue their version numbers (`--json` for scripts)
 - **`rollback`** — restore any saved version as a new version: `rollback NAME` brings back the previous version, `rollback NAME --to 2` restores version 2 — history is never rewritten, so a rollback is always undoable, and the restored prompt is scored fresh under the current rubric (`--json` for scripts)
+- **`search`** — find a saved prompt without remembering its name: `search QUERY` matches names, prompt text, improved text, and tags (case-insensitive), one row per name with versions/last/best and what matched; `--tags a,b` narrows to names carrying a tag (`--json` for scripts)
 - **`tokens`** — estimate token count and context-window share for any prompt: `tokens "prompt"` prints ~tokens, words, chars, and % of the model's window used (`--model` to pick the model, `--json` for scripts)
 - **`templates`** — 8 fill-in-the-blank templates (debug code, explain concepts, learn vocabulary, study plans…)
 - **`interactive`** — guided Q&A that builds your prompt with you
@@ -539,6 +540,42 @@ refused instead of silently duplicating. The restored version keeps the
 original's tags and is scored fresh under the current rubric, so a
 rollback after a rubric upgrade tells you what the old prompt scores now.
 
+## Search
+
+Real output — the library grows, and names get forgotten. Search finds the
+prompt by any word in it:
+
+```
+$ promptsmith search python
+
+Search results — 1 match(es) for "python"
+
+  name                      ver last best  matched   tags
+  py-help                     2   92   92  prompt, improved  coding, debug
+
+$ promptsmith search python --tags debug --json
+{
+  "query": "python",
+  "tags": ["debug"],
+  "results": [
+    {
+      "name": "py-help",
+      "versions": 2,
+      "last": 92,
+      "best": 92,
+      "delta": 55,
+      "tags": ["coding", "debug"],
+      "matched": ["prompt", "improved"]
+    }
+  ]
+}
+```
+
+One row per matching name, best score first (same order as `library`).
+`matched` says where the word hit: `name`, `prompt`, `improved`, or `tag`.
+No match gets an honest one-liner, not an empty table — and an empty query
+lists everything, so `search ""` doubles as a quick library scan.
+
 ## Agent skill export
 
 Coding agents (Claude Code, Codex, Cursor) can use PromptSmith's rubric
@@ -638,8 +675,8 @@ More pairs in [`examples/before_after.md`](examples/before_after.md).
                         +--------+---------+    templates / interactive /
                                  |                skill / compare / diff / report /
                                                   stats / improve / save / library /
-                                                  rollback / tokens / cost / check /
-                                                  export / import / init
+                                                  rollback / search / tokens / cost /
+                                                  check / export / import / init
             +--------------------+--------------------+
             |                    |                    |
      +------v------+      +------v------+      +------v------+
@@ -682,7 +719,7 @@ promptsmith/
 ├── promptsmith/
 │   ├── __init__.py        # public API
 │   ├── __main__.py        # `python -m promptsmith`
-│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/diff/report/stats/improve/save/library/rollback/tokens/cost/check/export/init/import)
+│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/diff/report/stats/improve/save/library/rollback/search/tokens/cost/check/export/init/import)
 │   ├── check.py           # `promptsmith check` — re-score the library, flag regressions
 │   ├── cost.py            # `promptsmith cost` — offline API cost estimates (11-model price snapshot)
 │   ├── diff.py            # `promptsmith diff` + `--diff` — word-level change diffs, stdlib difflib
@@ -697,6 +734,7 @@ promptsmith/
 │   ├── improve.py         # `promptsmith improve` — score, enhance, re-score in one step
 │   ├── library.py         # `promptsmith save` + `promptsmith library` — versioned prompt library
 │   ├── rollback.py        # `promptsmith rollback` — restore any saved version as a new version
+│   ├── search.py          # `promptsmith search` — find saved prompts by word or tag
 │   ├── scorer.py          # 5-check rubric, 0-100
 │   ├── skills.py          # `promptsmith skill` — renders an installable agent skill (rubric + improvement loop)
 │   ├── stats.py           # `promptsmith stats` — project totals across history + library
@@ -704,7 +742,7 @@ promptsmith/
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 156 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback)
+│   └── test_promptsmith.py  # 166 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

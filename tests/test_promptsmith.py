@@ -307,9 +307,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_18_0(self):
+    def test_version_is_1_19_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.18.0")
+        self.assertEqual(promptsmith.__version__, "1.19.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -1659,6 +1659,115 @@ class TestRollback(unittest.TestCase):
     def test_skill_mentions_rollback(self):
         md = render_skill()
         self.assertIn("`rollback`", md)
+
+
+class TestSearch(unittest.TestCase):
+    def _tmp_cwd(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        prev = os.getcwd()
+        os.chdir(tmp.name)
+        self.addCleanup(os.chdir, prev)
+
+    def _run(self, argv):
+        from promptsmith.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(argv)
+        return buf.getvalue()
+
+    def _seed(self):
+        from promptsmith.library import save_entry
+        save_entry("py-help", "help me with python", tags=["coding"])
+        save_entry("py-help", "help me with python 3 and pip", tags=["coding"])
+        save_entry("email-writer", "write a polite email to my teacher",
+                   tags=["writing"])
+        save_entry("email-writer", "write a polite email to my teacher "
+                   "about homework", tags=["writing"])
+
+    def test_matches_name(self):
+        from promptsmith.search import search_library
+        self._tmp_cwd()
+        self._seed()
+        rows = search_library("py-help")
+        self.assertEqual([r["name"] for r in rows], ["py-help"])
+        self.assertIn("name", rows[0]["matched"])
+
+    def test_matches_prompt_text_case_insensitive(self):
+        from promptsmith.search import search_library
+        self._tmp_cwd()
+        self._seed()
+        rows = search_library("TEACHER")
+        self.assertEqual([r["name"] for r in rows], ["email-writer"])
+        self.assertIn("prompt", rows[0]["matched"])
+
+    def test_matches_improved_text(self):
+        from promptsmith.library import save_entry
+        from promptsmith.search import search_library
+        self._tmp_cwd()
+        save_entry("code-fix", "write a python function that sorts a list",
+                   enhance_it=True)
+        rows = search_library("senior")
+        self.assertEqual([r["name"] for r in rows], ["code-fix"])
+        self.assertIn("improved", rows[0]["matched"])
+
+    def test_matches_tag(self):
+        from promptsmith.search import search_library
+        self._tmp_cwd()
+        self._seed()
+        rows = search_library("writ")
+        self.assertEqual([r["name"] for r in rows], ["email-writer"])
+        self.assertIn("tag", rows[0]["matched"])
+
+    def test_tag_filter_narrows(self):
+        from promptsmith.search import search_library
+        self._tmp_cwd()
+        self._seed()
+        rows = search_library("help", tags=["writing"])
+        self.assertEqual(rows, [])
+        rows = search_library("help", tags=["coding"])
+        self.assertEqual([r["name"] for r in rows], ["py-help"])
+
+    def test_no_match_and_empty_library(self):
+        from promptsmith.search import search_library
+        self._tmp_cwd()
+        self.assertEqual(search_library("zzz"), [])
+        self._seed()
+        self.assertEqual(search_library("zzz"), [])
+
+    def test_one_row_per_name_best_first(self):
+        from promptsmith.search import search_library
+        self._tmp_cwd()
+        self._seed()
+        rows = search_library("e")
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(rows[0]["best"] >= rows[1]["best"])
+        py = [r for r in rows if r["name"] == "py-help"][0]
+        self.assertEqual(py["versions"], 2)
+
+    def test_cli_text_and_json(self):
+        from promptsmith.cli import main
+        self._tmp_cwd()
+        self._seed()
+        out = self._run(["search", "teacher"])
+        self.assertIn("email-writer", out)
+        self.assertIn("prompt", out)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(["search", "teacher", "--json"])
+        data = json.loads(buf.getvalue())
+        self.assertEqual(data["query"], "teacher")
+        self.assertEqual(len(data["results"]), 1)
+
+    def test_cli_no_match_message(self):
+        self._tmp_cwd()
+        self._seed()
+        out = self._run(["search", "zzz"])
+        self.assertIn("No saved prompts match", out)
+
+    def test_skill_mentions_search(self):
+        md = render_skill()
+        self.assertIn("`search`", md)
 
 
 if __name__ == "__main__":

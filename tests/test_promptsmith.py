@@ -309,7 +309,7 @@ class TestSkill(unittest.TestCase):
 
     def test_version_is_1_19_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.19.0")
+        self.assertEqual(promptsmith.__version__, "1.20.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -1768,6 +1768,115 @@ class TestSearch(unittest.TestCase):
     def test_skill_mentions_search(self):
         md = render_skill()
         self.assertIn("`search`", md)
+
+
+class TestDelete(unittest.TestCase):
+    def _tmp_cwd(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        prev = os.getcwd()
+        os.chdir(tmp.name)
+        self.addCleanup(os.chdir, prev)
+
+    def _run(self, argv):
+        from promptsmith.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(argv)
+        return buf.getvalue()
+
+    def _seed(self):
+        from promptsmith.library import save_entry
+        save_entry("py-help", "help me with python", tags=["coding"])
+        save_entry("py-help", "help me with python 3 and pip", tags=["coding"])
+        save_entry("email-writer", "write a polite email to my teacher",
+                   tags=["writing"])
+
+    def test_delete_whole_name(self):
+        from promptsmith.delete import delete_entry
+        from promptsmith.library import load_library
+        self._tmp_cwd()
+        self._seed()
+        result = delete_entry("py-help")
+        self.assertEqual(result["deleted"], 2)
+        self.assertEqual(result["deleted_versions"], [1, 2])
+        self.assertEqual(result["remaining_versions"], [])
+        self.assertEqual(len(load_library()), 1)
+
+    def test_delete_one_version_keeps_numbers(self):
+        from promptsmith.delete import delete_entry
+        from promptsmith.library import entries_for
+        self._tmp_cwd()
+        self._seed()
+        result = delete_entry("py-help", version=1)
+        self.assertEqual(result["deleted_versions"], [1])
+        self.assertEqual(result["remaining_versions"], [2])
+        kept = entries_for("py-help")
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(kept[0]["version"], 2)
+
+    def test_delete_unknown_name_raises(self):
+        from promptsmith.delete import delete_entry
+        self._tmp_cwd()
+        self._seed()
+        with self.assertRaises(ValueError):
+            delete_entry("nope")
+
+    def test_delete_unknown_version_raises(self):
+        from promptsmith.delete import delete_entry
+        self._tmp_cwd()
+        self._seed()
+        with self.assertRaises(ValueError):
+            delete_entry("py-help", version=9)
+
+    def test_delete_empty_library_raises(self):
+        from promptsmith.delete import delete_entry
+        self._tmp_cwd()
+        with self.assertRaises(ValueError):
+            delete_entry("py-help")
+
+    def test_delete_then_library_shows_rest(self):
+        from promptsmith.library import load_library
+        self._tmp_cwd()
+        self._seed()
+        self._run(["delete", "email-writer"])
+        names = {r["name"] for r in load_library()}
+        self.assertEqual(names, {"py-help"})
+
+    def test_cli_text_and_json(self):
+        self._tmp_cwd()
+        self._seed()
+        out = self._run(["delete", "py-help", "--version", "1"])
+        self.assertIn("Deleted:", out)
+        self.assertIn("v1", out)
+        self.assertIn("v2", out)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            from promptsmith.cli import main
+            main(["delete", "py-help", "--json"])
+        data = json.loads(buf.getvalue())
+        self.assertEqual(data["name"], "py-help")
+        self.assertEqual(data["deleted_versions"], [2])
+        self.assertEqual(data["remaining_total"], 1)
+
+    def test_cli_unknown_name_exits_1(self):
+        self._tmp_cwd()
+        self._seed()
+        with self.assertRaises(SystemExit) as cm:
+            self._run(["delete", "nope"])
+        self.assertEqual(cm.exception.code, 1)
+
+    def test_cli_unknown_version_exits_1(self):
+        self._tmp_cwd()
+        self._seed()
+        with self.assertRaises(SystemExit) as cm:
+            self._run(["delete", "py-help", "--version", "9"])
+        self.assertEqual(cm.exception.code, 1)
+
+    def test_skill_mentions_delete(self):
+        md = render_skill()
+        self.assertIn("`delete`", md)
+
 
 
 if __name__ == "__main__":

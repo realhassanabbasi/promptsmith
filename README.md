@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Deps](https://img.shields.io/badge/dependencies-zero-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-166%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-176%20passing-brightgreen?style=flat-square)
 [![Live demo](https://img.shields.io/badge/demo-live%20in%20browser-black?style=flat-square)](https://realhassanabbasi.github.io/promptsmith/)
 
 **Turn rough prompts into engineered ones.** Paste in *"help me with python"*, get back a structured prompt with a role, context slots, requirements, output format, and guardrails — scored before and after. Works **offline**, with **zero dependencies**.
@@ -33,6 +33,7 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 - **`import`** — bring a shared library back in: `import FILE` reads a `export --format json` file into your library — scores preserved exactly as exported, duplicates skipped (never doubled), existing names continue their version numbers (`--json` for scripts)
 - **`rollback`** — restore any saved version as a new version: `rollback NAME` brings back the previous version, `rollback NAME --to 2` restores version 2 — history is never rewritten, so a rollback is always undoable, and the restored prompt is scored fresh under the current rubric (`--json` for scripts)
 - **`search`** — find a saved prompt without remembering its name: `search QUERY` matches names, prompt text, improved text, and tags (case-insensitive), one row per name with versions/last/best and what matched; `--tags a,b` narrows to names carrying a tag (`--json` for scripts)
+- **`delete`** — remove a bad entry from the library: `delete NAME` removes every version, `delete NAME --version 2` removes only that version — the versions left behind keep their numbers, never renumbered, so history stays stable (`--json` for scripts)
 - **`tokens`** — estimate token count and context-window share for any prompt: `tokens "prompt"` prints ~tokens, words, chars, and % of the model's window used (`--model` to pick the model, `--json` for scripts)
 - **`templates`** — 8 fill-in-the-blank templates (debug code, explain concepts, learn vocabulary, study plans…)
 - **`interactive`** — guided Q&A that builds your prompt with you
@@ -100,6 +101,10 @@ promptsmith import shared.json --json
 # a rewrite turned out worse? bring a saved version back as a new version
 promptsmith rollback py-help            # previous version becomes the new latest
 promptsmith rollback py-help --to 1     # or pick the exact version
+
+# a bad entry in the library? remove it (one version, or the whole name)
+promptsmith delete py-help --version 1
+promptsmith delete py-help
 
 # guided mode
 promptsmith interactive
@@ -576,6 +581,34 @@ One row per matching name, best score first (same order as `library`).
 No match gets an honest one-liner, not an empty table — and an empty query
 lists everything, so `search ""` doubles as a quick library scan.
 
+## Delete
+
+Real output — the library keeps every version you save, including the bad
+ones. Delete removes them; the versions left behind keep their numbers:
+
+```
+$ promptsmith save py-help "help me with python" --tags coding,debug
+Saved: py-help v1 — 37/100 (weak)
+$ promptsmith save py-help "help me with python 3 and pip" --tags coding,debug
+Saved: py-help v2 — 45/100 (weak)
+$ promptsmith delete py-help --version 1
+Deleted: py-help v1 — v2 still saved.
+$ promptsmith library py-help
+py-help — 1 version(s)
+
+  ver score grade     saved
+  v2   45/100 (weak    ) 2026-10-27
+       "help me with python 3 and pip"
+$ promptsmith delete py-help
+Deleted: py-help v2 — nothing left under that name.
+```
+
+`delete NAME` removes the whole name; `--version N` removes only that
+version. Unknown names and unknown versions are refused with an honest
+message and exit 1 — nothing is deleted on a typo. A deleted version is
+gone for good (the library file is plain JSONL, so copy it first if the
+entry matters).
+
 ## Agent skill export
 
 Coding agents (Claude Code, Codex, Cursor) can use PromptSmith's rubric
@@ -676,7 +709,8 @@ More pairs in [`examples/before_after.md`](examples/before_after.md).
                                  |                skill / compare / diff / report /
                                                   stats / improve / save / library /
                                                   rollback / search / tokens / cost /
-                                                  check / export / import / init
+                                                  check / export / import / init /
+                                                  delete
             +--------------------+--------------------+
             |                    |                    |
      +------v------+      +------v------+      +------v------+
@@ -719,7 +753,7 @@ promptsmith/
 ├── promptsmith/
 │   ├── __init__.py        # public API
 │   ├── __main__.py        # `python -m promptsmith`
-│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/diff/report/stats/improve/save/library/rollback/search/tokens/cost/check/export/init/import)
+│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/diff/report/stats/improve/save/library/rollback/search/tokens/cost/check/export/init/import/delete)
 │   ├── check.py           # `promptsmith check` — re-score the library, flag regressions
 │   ├── cost.py            # `promptsmith cost` — offline API cost estimates (11-model price snapshot)
 │   ├── diff.py            # `promptsmith diff` + `--diff` — word-level change diffs, stdlib difflib
@@ -735,6 +769,7 @@ promptsmith/
 │   ├── library.py         # `promptsmith save` + `promptsmith library` — versioned prompt library
 │   ├── rollback.py        # `promptsmith rollback` — restore any saved version as a new version
 │   ├── search.py          # `promptsmith search` — find saved prompts by word or tag
+│   ├── delete.py          # `promptsmith delete` — remove a prompt or one version (numbers never renumbered)
 │   ├── scorer.py          # 5-check rubric, 0-100
 │   ├── skills.py          # `promptsmith skill` — renders an installable agent skill (rubric + improvement loop)
 │   ├── stats.py           # `promptsmith stats` — project totals across history + library
@@ -742,7 +777,7 @@ promptsmith/
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 166 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search)
+│   └── test_promptsmith.py  # 176 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

@@ -95,6 +95,8 @@ def _workflow_section():
         "`save` / `library` → `report` → `stats` (the whole picture: totals across history and library) → `check` (the regression guard) → "
         "`rollback` (restore any saved version as a new one — history is never rewritten) → "
         "`search` (find a saved prompt by word or tag before rebuilding it) → "
+        "`delete` (remove a prompt or one version — the rest keeps its "
+        "numbers) → "
         "`export` (share the library as Markdown or JSON) → "
         "`import` (bring a shared JSON export back in — duplicates skipped, "
         "scores preserved). "

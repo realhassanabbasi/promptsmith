@@ -9,6 +9,7 @@ from .check import check_library, check_name, check_payload
 from .classifier import predict_intent
 from .compare import compare_prompts
 from .cost import MODEL_PRICES, cost_report
+from .delete import delete_entry
 from .diff import diff_payload, diff_stats, render_diff
 from .export import export_json, export_markdown
 from .importing import import_file
@@ -463,6 +464,26 @@ def cmd_rollback(args):
     print(f"{bold('Library:')} {library_path()}\n")
 
 
+def cmd_delete(args):
+    """Remove a saved prompt or one of its versions from the library."""
+    try:
+        result = delete_entry(args.name, version=args.version)
+    except ValueError as e:
+        print(f"Delete refused: {e}")
+        sys.exit(1)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    vers = ", ".join(f"v{v}" for v in result["deleted_versions"])
+    if result["remaining_versions"]:
+        left = ", ".join(f"v{v}" for v in result["remaining_versions"])
+        print(f"\n{bold('Deleted:')} {cyan(args.name)} {vers} — "
+              f"{left} still saved.\n")
+    else:
+        print(f"\n{bold('Deleted:')} {cyan(args.name)} {vers} — "
+              f"nothing left under that name.\n")
+
+
 def cmd_check(args):
     """Re-score the saved library against its own history; flag regressions."""
     records = load_library()
@@ -831,6 +852,14 @@ def build_parser():
     im.add_argument("--json", action="store_true",
                     help="Print the import report as machine-readable JSON")
     im.set_defaults(func=cmd_import)
+
+    dl = sub.add_parser("delete", help="Remove a saved prompt or one version from the library")
+    dl.add_argument("name", help="Saved prompt name to delete")
+    dl.add_argument("--version", type=int, default=None, metavar="VERSION",
+                    help="Delete only this version (default: all versions)")
+    dl.add_argument("--json", action="store_true",
+                    help="Print the delete report as machine-readable JSON")
+    dl.set_defaults(func=cmd_delete)
 
     ni = sub.add_parser("init", help="Start a PromptSmith project folder with demo prompts")
     ni.add_argument("dir", nargs="?", default=".",

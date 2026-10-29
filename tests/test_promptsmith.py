@@ -307,9 +307,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_19_0(self):
+    def test_version_is_1_21_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.20.0")
+        self.assertEqual(promptsmith.__version__, "1.21.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -1877,6 +1877,127 @@ class TestDelete(unittest.TestCase):
         md = render_skill()
         self.assertIn("`delete`", md)
 
+
+class TestRename(unittest.TestCase):
+    def _tmp_cwd(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        prev = os.getcwd()
+        os.chdir(tmp.name)
+        self.addCleanup(os.chdir, prev)
+
+    def _run(self, argv):
+        from promptsmith.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(argv)
+        return buf.getvalue()
+
+    def _seed(self):
+        from promptsmith.library import save_entry
+        save_entry("py-help", "help me with python", tags=["coding"])
+        save_entry("py-help", "help me with python 3 and pip", tags=["coding"])
+        save_entry("email-writer", "write a polite email to my teacher",
+                   tags=["writing"])
+
+    def test_rename_moves_all_versions_numbers_kept(self):
+        from promptsmith.library import entries_for
+        from promptsmith.rename import rename_entry
+        self._tmp_cwd()
+        self._seed()
+        result = rename_entry("py-help", "python-help")
+        self.assertEqual(result["renamed"], 2)
+        self.assertEqual(result["versions"], [1, 2])
+        self.assertEqual(entries_for("py-help"), [])
+        moved = entries_for("python-help")
+        self.assertEqual([r["version"] for r in moved], [1, 2])
+
+    def test_rename_preserves_scores_and_tags(self):
+        from promptsmith.library import entries_for
+        from promptsmith.rename import rename_entry
+        self._tmp_cwd()
+        self._seed()
+        before = entries_for("py-help")
+        rename_entry("py-help", "python-help")
+        after = entries_for("python-help")
+        self.assertEqual([r["score"] for r in after],
+                         [r["score"] for r in before])
+        self.assertEqual([r["tags"] for r in after],
+                         [r["tags"] for r in before])
+
+    def test_rename_unknown_name_raises(self):
+        from promptsmith.rename import rename_entry
+        self._tmp_cwd()
+        self._seed()
+        with self.assertRaises(ValueError):
+            rename_entry("nope", "fresh")
+
+    def test_rename_onto_existing_name_raises_and_changes_nothing(self):
+        from promptsmith.library import load_library
+        from promptsmith.rename import rename_entry
+        self._tmp_cwd()
+        self._seed()
+        before = load_library()
+        with self.assertRaises(ValueError):
+            rename_entry("py-help", "email-writer")
+        after = load_library()
+        self.assertEqual([r["name"] for r in after],
+                         [r["name"] for r in before])
+
+    def test_rename_same_name_raises(self):
+        from promptsmith.rename import rename_entry
+        self._tmp_cwd()
+        self._seed()
+        with self.assertRaises(ValueError):
+            rename_entry("py-help", "py-help")
+
+    def test_rename_empty_library_raises(self):
+        from promptsmith.rename import rename_entry
+        self._tmp_cwd()
+        with self.assertRaises(ValueError):
+            rename_entry("py-help", "python-help")
+
+    def test_rename_then_library_shows_new_name_only(self):
+        from promptsmith.library import load_library
+        self._tmp_cwd()
+        self._seed()
+        self._run(["rename", "py-help", "python-help"])
+        names = {r["name"] for r in load_library()}
+        self.assertEqual(names, {"python-help", "email-writer"})
+
+    def test_cli_text_and_json(self):
+        self._tmp_cwd()
+        self._seed()
+        out = self._run(["rename", "py-help", "python-help"])
+        self.assertIn("Renamed:", out)
+        self.assertIn("python-help", out)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            from promptsmith.cli import main
+            main(["rename", "email-writer", "teacher-email", "--json"])
+        data = json.loads(buf.getvalue())
+        self.assertEqual(data["old"], "email-writer")
+        self.assertEqual(data["new"], "teacher-email")
+        self.assertEqual(data["renamed"], 1)
+        self.assertEqual(data["versions"], [1])
+
+    def test_cli_unknown_name_exits_1(self):
+        self._tmp_cwd()
+        self._seed()
+        with self.assertRaises(SystemExit) as cm:
+            self._run(["rename", "nope", "fresh"])
+        self.assertEqual(cm.exception.code, 1)
+
+    def test_cli_existing_target_exits_1(self):
+        self._tmp_cwd()
+        self._seed()
+        with self.assertRaises(SystemExit) as cm:
+            self._run(["rename", "py-help", "email-writer"])
+        self.assertEqual(cm.exception.code, 1)
+
+    def test_skill_mentions_rename(self):
+        md = render_skill()
+        self.assertIn("`rename`", md)
 
 
 if __name__ == "__main__":

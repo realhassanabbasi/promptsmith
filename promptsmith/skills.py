@@ -97,6 +97,8 @@ def _workflow_section():
         "`search` (find a saved prompt by word or tag before rebuilding it) → "
         "`delete` (remove a prompt or one version — the rest keeps its "
         "numbers) → "
+        "`rename` (give a saved prompt a better name — every version moves, "
+        "numbers kept, never merged onto an existing name) → "
         "`export` (share the library as Markdown or JSON) → "
         "`import` (bring a shared JSON export back in — duplicates skipped, "
         "scores preserved). "

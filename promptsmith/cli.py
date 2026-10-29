@@ -17,6 +17,7 @@ from .history import load_history, log_score, trend, verdict
 from .improve import improve_prompt, what_improved
 from .init import init_project
 from .library import entries_for, library_path, load_library, save_entry, summarize
+from .rename import rename_entry
 from .rollback import rollback_entry
 from .search import search_library
 from .scorer import grade, score_prompt
@@ -484,6 +485,21 @@ def cmd_delete(args):
               f"nothing left under that name.\n")
 
 
+def cmd_rename(args):
+    """Rename a saved prompt — every version moves, numbers kept."""
+    try:
+        result = rename_entry(args.old, args.new)
+    except ValueError as e:
+        print(f"Rename refused: {e}")
+        sys.exit(1)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return
+    vers = ", ".join(f"v{v}" for v in result["versions"])
+    print(f"\n{bold('Renamed:')} {cyan(args.old)} → {cyan(args.new)} — "
+          f"{result['renamed']} version(s) ({vers}) moved.\n")
+
+
 def cmd_check(args):
     """Re-score the saved library against its own history; flag regressions."""
     records = load_library()
@@ -860,6 +876,13 @@ def build_parser():
     dl.add_argument("--json", action="store_true",
                     help="Print the delete report as machine-readable JSON")
     dl.set_defaults(func=cmd_delete)
+
+    rn = sub.add_parser("rename", help="Rename a saved prompt — every version moves")
+    rn.add_argument("old", help="Current saved prompt name")
+    rn.add_argument("new", help="New name (must not already exist)")
+    rn.add_argument("--json", action="store_true",
+                    help="Print the rename report as machine-readable JSON")
+    rn.set_defaults(func=cmd_rename)
 
     ni = sub.add_parser("init", help="Start a PromptSmith project folder with demo prompts")
     ni.add_argument("dir", nargs="?", default=".",

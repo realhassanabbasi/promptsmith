@@ -8,6 +8,10 @@ best-scoring version is always one glance away.
 `promptsmith save NAME "prompt"`   -> scores (optionally improves) and saves
 `promptsmith library`              -> one row per name: versions, last, best
 `promptsmith library NAME`         -> full version history of one name
+
+Saving the exact same prompt text under the same name twice is refused
+(it would only double an entry) unless `force=True` / `--force` is given.
+Rollback is exempt: restoring an old version as a new one is intentional.
 """
 
 import json
@@ -48,16 +52,29 @@ def entries_for(name, records=None, cwd=None):
     return [r for r in records if r.get("name") == name]
 
 
-def save_entry(name, prompt, tags=None, enhance_it=False, cwd=None):
+def save_entry(name, prompt, tags=None, enhance_it=False, cwd=None,
+               force=False):
     """Score (optionally improve) a prompt and save it as a new version.
 
     Returns the record dict. `version` is 1 + the number of existing entries
     with the same name. `enhanced` is None unless `enhance_it` is True.
+    Saving the exact same prompt text under the same name raises
+    ValueError unless `force` is True — an exact duplicate adds no
+    information, it only doubles an entry. A different name, or a
+    different prompt text, always saves normally.
     """
     from .improve import improve_prompt
     from .scorer import grade, score_prompt
 
     tags = [t.strip() for t in (tags or []) if t.strip()]
+    if not force:
+        for existing in entries_for(name, cwd=cwd):
+            if existing.get("prompt") == prompt:
+                raise ValueError(
+                    f"'{name}' already has this exact prompt saved as "
+                    f"v{existing.get('version')} — use --force to save "
+                    "it again"
+                )
     if enhance_it:
         result = improve_prompt(prompt)
         score = result["after"]["score"]

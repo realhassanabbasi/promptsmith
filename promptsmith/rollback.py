@@ -53,8 +53,11 @@ def rollback_entry(name, version=None, cwd=None):
         raise ValueError(
             f'Version {target["version"]} of "{name}" is empty — '
             "nothing to restore.")
+    # force=True: restoring a version re-saves text that already exists
+    # under this name by definition — that is the point of a rollback,
+    # not a duplicate. The duplicate guard applies to `save` only.
     record = save_entry(name, keeper, tags=list(target.get("tags") or []),
-                        cwd=cwd)
+                        cwd=cwd, force=True)
     return {
         "name": name,
         "from_version": target["version"],

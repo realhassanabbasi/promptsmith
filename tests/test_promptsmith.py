@@ -307,9 +307,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_21_0(self):
+    def test_version_is_1_22_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.21.0")
+        self.assertEqual(promptsmith.__version__, "1.22.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -1998,6 +1998,111 @@ class TestRename(unittest.TestCase):
     def test_skill_mentions_rename(self):
         md = render_skill()
         self.assertIn("`rename`", md)
+
+
+class TestDuplicateGuard(unittest.TestCase):
+    WEAK = "help me with python"
+
+    def _tmp_cwd(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        prev = os.getcwd()
+        os.chdir(tmp.name)
+        self.addCleanup(os.chdir, prev)
+
+    def _run(self, argv):
+        from promptsmith.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(argv)
+        return buf.getvalue()
+
+    def test_exact_duplicate_raises_and_saves_nothing(self):
+        from promptsmith.library import save_entry, entries_for
+        self._tmp_cwd()
+        save_entry("py-help", self.WEAK)
+        with self.assertRaises(ValueError) as cm:
+            save_entry("py-help", self.WEAK)
+        self.assertIn("v1", str(cm.exception))
+        self.assertEqual(len(entries_for("py-help")), 1)
+
+    def test_duplicate_of_any_version_raises(self):
+        from promptsmith.library import save_entry, entries_for
+        self._tmp_cwd()
+        save_entry("py-help", self.WEAK)
+        save_entry("py-help", "help me with python 3")
+        with self.assertRaises(ValueError):
+            save_entry("py-help", self.WEAK)
+        self.assertEqual(len(entries_for("py-help")), 2)
+
+    def test_same_prompt_under_other_name_saves(self):
+        from promptsmith.library import save_entry, entries_for
+        self._tmp_cwd()
+        save_entry("py-help", self.WEAK)
+        rec = save_entry("other", self.WEAK)
+        self.assertEqual(rec["version"], 1)
+        self.assertEqual(len(entries_for("other")), 1)
+
+    def test_force_saves_duplicate_as_new_version(self):
+        from promptsmith.library import save_entry, entries_for
+        self._tmp_cwd()
+        save_entry("py-help", self.WEAK)
+        rec = save_entry("py-help", self.WEAK, force=True)
+        self.assertEqual(rec["version"], 2)
+        self.assertEqual(len(entries_for("py-help")), 2)
+
+    def test_force_with_improve_saves(self):
+        from promptsmith.library import save_entry, entries_for
+        self._tmp_cwd()
+        save_entry("py-help", self.WEAK, enhance_it=True)
+        rec = save_entry("py-help", self.WEAK, enhance_it=True, force=True)
+        self.assertEqual(rec["version"], 2)
+        self.assertEqual(len(entries_for("py-help")), 2)
+
+    def test_cli_duplicate_exits_1(self):
+        self._tmp_cwd()
+        self._run(["save", "py-help", self.WEAK])
+        with self.assertRaises(SystemExit) as cm:
+            self._run(["save", "py-help", self.WEAK])
+        self.assertEqual(cm.exception.code, 1)
+
+    def test_cli_duplicate_message_names_version(self):
+        self._tmp_cwd()
+        self._run(["save", "py-help", self.WEAK])
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            from promptsmith.cli import main
+            with self.assertRaises(SystemExit):
+                main(["save", "py-help", self.WEAK])
+        self.assertIn("Save refused:", buf.getvalue())
+        self.assertIn("v1", buf.getvalue())
+
+    def test_cli_force_saves(self):
+        self._tmp_cwd()
+        self._run(["save", "py-help", self.WEAK])
+        out = self._run(["save", "py-help", self.WEAK, "--force"])
+        self.assertIn("v2", out)
+
+    def test_cli_duplicate_json_still_refuses(self):
+        self._tmp_cwd()
+        self._run(["save", "py-help", self.WEAK])
+        with self.assertRaises(SystemExit) as cm:
+            self._run(["save", "py-help", self.WEAK, "--json"])
+        self.assertEqual(cm.exception.code, 1)
+
+    def test_skill_mentions_duplicate_guard(self):
+        md = render_skill()
+        self.assertIn("--force", md)
+
+    def test_rollback_still_restores_despite_guard(self):
+        from promptsmith.library import save_entry, entries_for
+        from promptsmith.rollback import rollback_entry
+        self._tmp_cwd()
+        save_entry("py-help", self.WEAK)
+        save_entry("py-help", "help me with python 3")
+        result = rollback_entry("py-help", version=1)
+        self.assertEqual(result["to_version"], 3)
+        self.assertEqual(len(entries_for("py-help")), 3)
 
 
 if __name__ == "__main__":

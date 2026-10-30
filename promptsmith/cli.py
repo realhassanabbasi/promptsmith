@@ -359,8 +359,12 @@ def cmd_stats(args):
 def cmd_save(args):
     """Score (optionally improve) a prompt and save it to the library."""
     tags = [t.strip() for t in args.tags.split(",")] if args.tags else []
-    record = save_entry(args.name, args.prompt, tags=tags,
-                        enhance_it=args.improve)
+    try:
+        record = save_entry(args.name, args.prompt, tags=tags,
+                            enhance_it=args.improve, force=args.force)
+    except ValueError as e:
+        print(f"Save refused: {e}")
+        sys.exit(1)
     if args.json:
         print(json.dumps(record, indent=2))
         return
@@ -791,6 +795,9 @@ def build_parser():
                     help="Also save the enhanced version alongside")
     sv.add_argument("--tags", metavar="TAGS",
                     help="Comma-separated tags, e.g. --tags coding,debug")
+    sv.add_argument("--force", action="store_true",
+                    help="Save even if this exact prompt is already saved "
+                    "under this name")
     sv.add_argument("--json", action="store_true",
                     help="Print the saved record as machine-readable JSON")
     sv.set_defaults(func=cmd_save)

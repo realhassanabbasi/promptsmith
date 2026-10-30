@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Deps](https://img.shields.io/badge/dependencies-zero-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-187%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-198%20passing-brightgreen?style=flat-square)
 [![Live demo](https://img.shields.io/badge/demo-live%20in%20browser-black?style=flat-square)](https://realhassanabbasi.github.io/promptsmith/)
 
 **Turn rough prompts into engineered ones.** Paste in *"help me with python"*, get back a structured prompt with a role, context slots, requirements, output format, and guardrails — scored before and after. Works **offline**, with **zero dependencies**.
@@ -27,7 +27,7 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 - **`diff`** — show exactly what changed, word by word: `diff A.txt B.txt` on its own, or `--diff` on `enhance` and `compare` so a score gain is backed by visible edits (`--json` for scripts)
 - **`history`** — log scored runs (`score`/`compare --log`) and print per-prompt trend reports (`report`): runs, averages, sparklines, and an improving/steady/slipping verdict (`--json` for dashboards)
 - **`stats`** — the whole picture in one glance: total runs and prompts tracked, average/best/worst score, per-intent averages, and library totals (names, versions, best prompt) — `report` shows trends per prompt, `stats` shows the project (`--json` for dashboards)
-- **`library`** — save named prompts as versioned library entries (`save NAME "prompt"`; `--improve` saves the enhanced version too): `library` lists each name's versions/last/best, `library NAME` shows its full version history — your best-scoring prompt is always one glance away (`--tags`, `--json`)
+- **`library`** — save named prompts as versioned library entries (`save NAME "prompt"`; `--improve` saves the enhanced version too): `library` lists each name's versions/last/best, `library NAME` shows its full version history — your best-scoring prompt is always one glance away (`--tags`, `--json`). Re-saving the exact same prompt text under the same name is refused (it would only double an entry) unless `--force` is given; rollback is exempt, since restoring a version is intentional
 - **`check`** — regression guard for your saved library: re-scores every prompt against its recorded best and flags regressions (rubric upgrades can't silently change what your prompts score); `--fail-on-regression` exits 1 for CI, `--json` for dashboards
 - **`export`** — share your prompt library: `export` prints it as Markdown (one section per prompt, versions with scores and improved text), `--format json` for machine-readable output, `-o FILE` to write to a file, `export NAME` for a single prompt
 - **`import`** — bring a shared library back in: `import FILE` reads a `export --format json` file into your library — scores preserved exactly as exported, duplicates skipped (never doubled), existing names continue their version numbers (`--json` for scripts)
@@ -452,6 +452,32 @@ shows the full version history. Records live in `.promptsmith/library.jsonl`
 for scripts. `--improve` saves both the original and its enhanced rewrite,
 with the before→after proof stored on the record.
 
+## Duplicate guard
+
+Real output — an exact duplicate under the same name is refused, not silently doubled:
+
+```
+$ promptsmith save py-help "help me with python" --tags coding,debug
+
+Saved: py-help v1 — 37/100 (weak)
+Tags: coding, debug
+Library: /home/user/project/.promptsmith/library.jsonl
+
+$ promptsmith save py-help "help me with python"
+Save refused: 'py-help' already has this exact prompt saved as v1 — use --force to save it again
+
+$ promptsmith save py-help "help me with python" --force
+
+Saved: py-help v2 — 37/100 (weak)
+Library: /home/user/project/.promptsmith/library.jsonl
+```
+
+The guard compares the exact prompt text under the same name only — the same
+text under a different name, or a different text under the same name, always
+saves normally. Rollback is exempt: restoring a saved version re-saves its
+text on purpose, so it never trips the guard. This matches `import`, which
+already skips duplicates instead of doubling them.
+
 ## Export
 
 Real output — share the library as Markdown or JSON:
@@ -811,7 +837,7 @@ promptsmith/
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 187 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete, rename)
+│   └── test_promptsmith.py  # 198 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete, rename, duplicate-guard)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

@@ -16,7 +16,8 @@ from .importing import import_file
 from .history import load_history, log_score, trend, verdict
 from .improve import improve_prompt, what_improved
 from .init import init_project
-from .library import entries_for, library_path, load_library, save_entry, summarize
+from .library import (entries_for, filter_by_tags, library_path,
+                      load_library, save_entry, summarize)
 from .rename import rename_entry
 from .rollback import rollback_entry
 from .search import search_library
@@ -411,11 +412,24 @@ def cmd_library(args):
         print("Library is empty — run `promptsmith save NAME \"...\"` "
               "to add your first prompt.")
         return
+    wanted = [t.strip() for t in (args.tags.split(",") if args.tags else [])
+              if t.strip()]
     if args.name:
         versions = entries_for(args.name, records)
         if not versions:
             print(f"No saved prompt named \"{args.name}\".")
             return
+        if wanted:
+            name_tags = []
+            for v in versions:
+                for t in v.get("tags") or []:
+                    if t not in name_tags:
+                        name_tags.append(t)
+            if not any(t.lower() in [w.lower() for w in wanted]
+                       for t in name_tags):
+                print(f"No versions of \"{args.name}\" carry tag(s): "
+                      f"{', '.join(wanted)}.")
+                return
         if args.json:
             print(json.dumps(versions, indent=2))
             return
@@ -434,11 +448,24 @@ def cmd_library(args):
         print()
         return
     rows = summarize(records)
+    if wanted:
+        rows = filter_by_tags(rows, wanted)
+        if not rows:
+            known = []
+            for r in summarize(records):
+                for t in r["tags"]:
+                    if t not in known:
+                        known.append(t)
+            print(f"No saved prompts carry tag(s): {', '.join(wanted)}.")
+            if known:
+                print(f"Saved tags: {', '.join(known)}.")
+            return
     if args.json:
         print(json.dumps(rows, indent=2))
         return
     arrows = {"improving": "▲", "slipping": "▼", "steady": "▬"}
-    print(f"\n{bold('Prompt library')} — {len(records)} version(s), "
+    shown_versions = sum(r["versions"] for r in rows)
+    print(f"\n{bold('Prompt library')} — {shown_versions} version(s), "
           f"{len(rows)} prompt(s) saved\n")
     print(f"  {'name':24} {'ver':>4} {'last':>4} {'best':>4} "
           f"{'Δ':>4}  tags")
@@ -805,6 +832,8 @@ def build_parser():
     lb = sub.add_parser("library", help="List saved prompts or show one name's history")
     lb.add_argument("name", nargs="?", default=None,
                     help="Show the version history of this name (omit to list all)")
+    lb.add_argument("--tags", metavar="TAGS",
+                    help="Only names carrying one of these tags, e.g. --tags coding,debug")
     lb.add_argument("--json", action="store_true",
                     help="Print as machine-readable JSON")
     lb.set_defaults(func=cmd_library)

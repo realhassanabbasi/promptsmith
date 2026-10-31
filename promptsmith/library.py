@@ -139,3 +139,17 @@ def summarize(records=None, cwd=None):
         })
     rows.sort(key=lambda r: r["best"], reverse=True)
     return rows
+
+
+def filter_by_tags(rows, tags):
+    """Keep only rows carrying at least one of the given tags.
+
+    Tag matching is case-insensitive and comma-separated input is split
+    by the caller. Empty/blank tags mean no filtering — every row passes.
+    Same any-match rule as `search --tags`, so the two flags agree.
+    """
+    wanted = [t.strip().lower() for t in (tags or []) if t.strip()]
+    if not wanted:
+        return list(rows)
+    return [r for r in rows
+            if any(t.lower() in wanted for t in (r.get("tags") or []))]

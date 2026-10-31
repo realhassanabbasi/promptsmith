@@ -307,9 +307,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_22_0(self):
+    def test_version_is_1_23_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.22.0")
+        self.assertEqual(promptsmith.__version__, "1.23.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -2103,6 +2103,88 @@ class TestDuplicateGuard(unittest.TestCase):
         result = rollback_entry("py-help", version=1)
         self.assertEqual(result["to_version"], 3)
         self.assertEqual(len(entries_for("py-help")), 3)
+
+
+class TestLibraryTags(unittest.TestCase):
+    WEAK = "help me with python"
+    ESSAY = "help me write an essay about climate change"
+
+    def _tmp_cwd(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        prev = os.getcwd()
+        os.chdir(tmp.name)
+        self.addCleanup(os.chdir, prev)
+
+    def _run(self, argv):
+        from promptsmith.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(argv)
+        return buf.getvalue()
+
+    def _seed(self):
+        from promptsmith.library import save_entry
+        save_entry("py-help", self.WEAK, tags=["coding", "debug"])
+        save_entry("essay-help", self.ESSAY, tags=["writing"])
+
+    def test_filter_keeps_any_match(self):
+        from promptsmith.library import summarize, filter_by_tags
+        self._tmp_cwd()
+        self._seed()
+        rows = filter_by_tags(summarize(), ["debug"])
+        self.assertEqual([r["name"] for r in rows], ["py-help"])
+
+    def test_filter_is_case_insensitive(self):
+        from promptsmith.library import summarize, filter_by_tags
+        self._tmp_cwd()
+        self._seed()
+        rows = filter_by_tags(summarize(), ["CODING"])
+        self.assertEqual([r["name"] for r in rows], ["py-help"])
+
+    def test_filter_blank_tags_passes_everything(self):
+        from promptsmith.library import summarize, filter_by_tags
+        self._tmp_cwd()
+        self._seed()
+        self.assertEqual(len(filter_by_tags(summarize(), ["", "  "])), 2)
+
+    def test_cli_list_filters_text(self):
+        self._tmp_cwd()
+        self._seed()
+        out = self._run(["library", "--tags", "coding"])
+        self.assertIn("py-help", out)
+        self.assertNotIn("essay-help", out)
+
+    def test_cli_list_no_match_is_honest(self):
+        self._tmp_cwd()
+        self._seed()
+        out = self._run(["library", "--tags", "music"])
+        self.assertIn("No saved prompts carry tag(s): music.", out)
+        self.assertIn("Saved tags: coding, debug, writing.", out)
+
+    def test_cli_list_json_filtered(self):
+        self._tmp_cwd()
+        self._seed()
+        rows = json.loads(self._run(["library", "--tags", "writing",
+                                     "--json"]))
+        self.assertEqual([r["name"] for r in rows], ["essay-help"])
+
+    def test_cli_name_with_matching_tag_shows_history(self):
+        self._tmp_cwd()
+        self._seed()
+        out = self._run(["library", "py-help", "--tags", "debug"])
+        self.assertIn("py-help — 1 version(s)", out)
+
+    def test_cli_name_with_other_tag_is_honest(self):
+        self._tmp_cwd()
+        self._seed()
+        out = self._run(["library", "py-help", "--tags", "writing"])
+        self.assertIn('No versions of "py-help" carry tag(s): writing.',
+                      out)
+
+    def test_skill_mentions_library_tags(self):
+        md = render_skill()
+        self.assertIn("--tags", md)
 
 
 if __name__ == "__main__":

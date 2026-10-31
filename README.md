@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Deps](https://img.shields.io/badge/dependencies-zero-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-198%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-207%20passing-brightgreen?style=flat-square)
 [![Live demo](https://img.shields.io/badge/demo-live%20in%20browser-black?style=flat-square)](https://realhassanabbasi.github.io/promptsmith/)
 
 **Turn rough prompts into engineered ones.** Paste in *"help me with python"*, get back a structured prompt with a role, context slots, requirements, output format, and guardrails — scored before and after. Works **offline**, with **zero dependencies**.
@@ -85,6 +85,7 @@ promptsmith report
 # save your best prompts as versioned library entries
 promptsmith save py-help "help me with python" --tags coding,debug
 promptsmith library
+promptsmith library --tags coding   # only names carrying that tag
 
 # guard the library — flag anything that regressed since it was saved
 promptsmith check
@@ -451,6 +452,27 @@ shows the full version history. Records live in `.promptsmith/library.jsonl`
 (git-ignored, same folder as score history), and `--json` gives the same data
 for scripts. `--improve` saves both the original and its enhanced rewrite,
 with the before→after proof stored on the record.
+
+Filter the list by tag — same any-match, case-insensitive rule as
+`search --tags`, so the two flags agree:
+
+```
+$ promptsmith library --tags coding
+
+Prompt library — 1 version(s), 1 prompt(s) saved
+
+  name                      ver last best    Δ  tags
+  py-help                     1   37   37   +0▬  coding, debug
+
+$ promptsmith library --tags music
+
+No saved prompts carry tag(s): music.
+Saved tags: coding, debug, writing.
+```
+
+A miss names the tags that do exist, so you can retry instead of guessing.
+`library NAME --tags ...` shows that name's history only if it carries one
+of the tags, and says so plainly when it doesn't.
 
 ## Duplicate guard
 
@@ -837,7 +859,7 @@ promptsmith/
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 198 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete, rename, duplicate-guard)
+│   └── test_promptsmith.py  # 207 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete, rename, duplicate-guard, library-tags)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

@@ -538,14 +538,31 @@ def cmd_check(args):
         print("Library is empty — run `promptsmith save NAME \"...\"` "
               "to add your first prompt.")
         return
+    wanted = [t.strip() for t in (args.tags.split(",") if args.tags else [])
+              if t.strip()]
     if args.name:
         result = check_name(args.name, records)
         if result is None:
             print(f"No saved prompt named \"{args.name}\".")
             return
+        if wanted and not any(t.lower() in [w.lower() for w in wanted]
+                               for t in result["tags"]):
+            print(f"No versions of \"{args.name}\" carry tag(s): "
+                  f"{', '.join(wanted)}.")
+            return
         results = [result]
     else:
-        results = check_library(records)
+        results = check_library(records, tags=wanted)
+        if wanted and not results:
+            known = []
+            for r in check_library(records):
+                for t in r["tags"]:
+                    if t not in known:
+                        known.append(t)
+            print(f"No saved prompts carry tag(s): {', '.join(wanted)}.")
+            if known:
+                print(f"Saved tags: {', '.join(known)}.")
+            return
     if args.json:
         print(json.dumps(check_payload(results), indent=2))
     else:
@@ -857,6 +874,9 @@ def build_parser():
     ck = sub.add_parser("check", help="Re-score the saved library; flag regressions")
     ck.add_argument("name", nargs="?", default=None,
                     help="Check only this saved name (omit for the whole library)")
+    ck.add_argument("--tags", metavar="TAGS",
+                    help="Only check names carrying one of these tags "
+                    "(comma-separated, any match, case-insensitive)")
     ck.add_argument("--fail-on-regression", action="store_true",
                     help="Exit 1 if any prompt scores below its recorded best "
                          "(useful in CI)")

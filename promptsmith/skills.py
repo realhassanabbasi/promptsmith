@@ -96,7 +96,7 @@ def _workflow_section():
         "an exact duplicate is refused unless `--force` is given — a "
         "duplicate adds no information) → `report` → "
         "`stats` (the whole picture: totals across history and library) → "
-        "`check` (the regression guard) → "
+        "`check` (the regression guard; `--tags` scopes it to one tag, so CI can guard just the production prompts) → "
         "`rollback` (restore any saved version as a new one — history is never rewritten) → "
         "`search` (find a saved prompt by word or tag before rebuilding it) → "
         "`delete` (remove a prompt or one version — the rest keeps its "

@@ -8,12 +8,13 @@ regressed prompts deserve a re-pass before they ship again.
 
 `promptsmith check`              -> health table for the whole library
 `promptsmith check NAME`         -> health of one saved prompt
+`promptsmith check --tags a,b`   -> health table for names carrying a tag
 `promptsmith check --fail-on-regression` -> exit 1 if any prompt regressed
 `--json`                         -> machine-readable results (keeps script
                                     output pure when piped into CI)
 """
 
-from .library import entries_for, load_library
+from .library import entries_for, filter_by_tags, load_library
 from .scorer import score_prompt
 
 VERDICTS = ("regressed", "steady", "improved")
@@ -57,8 +58,15 @@ def check_name(name, records=None, cwd=None):
     }
 
 
-def check_library(records=None, cwd=None):
-    """Health-check every saved prompt, regressed first. Empty library -> []."""
+def check_library(records=None, cwd=None, tags=None):
+    """Health-check every saved prompt, regressed first. Empty library -> [].
+
+    `tags` filters the table to names carrying at least one of the tags —
+    the same any-match, case-insensitive rule as `library --tags` and
+    `search --tags` (filter_by_tags is the single source of truth). The
+    filter applies AFTER scoring, so a name's recorded best still counts
+    every version, not just the tagged ones.
+    """
     if records is None:
         records = load_library(cwd)
     names = []
@@ -68,6 +76,7 @@ def check_library(records=None, cwd=None):
             names.append(n)
     results = [check_name(n, records, cwd) for n in names]
     results = [r for r in results if r is not None]
+    results = filter_by_tags(results, tags)
     results.sort(key=lambda r: (r["delta"], -r["best"]))
     return results
 

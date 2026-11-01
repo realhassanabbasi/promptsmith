@@ -307,9 +307,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_23_0(self):
+    def test_version_is_1_24_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.23.0")
+        self.assertEqual(promptsmith.__version__, "1.24.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -1139,6 +1139,115 @@ class TestCheck(unittest.TestCase):
         for key in ("name", "versions", "current", "best",
                     "delta", "verdict", "tags"):
             self.assertIn(key, r)
+
+
+class TestCheckTags(unittest.TestCase):
+    WEAK = "help me with python"
+    ESSAY = "help me write an essay about climate change"
+
+    def _tmp_cwd(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        prev = os.getcwd()
+        os.chdir(tmp.name)
+        self.addCleanup(os.chdir, prev)
+
+    def _run(self, argv):
+        from promptsmith.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(argv)
+        return buf.getvalue()
+
+    def _seed(self):
+        from promptsmith.library import save_entry
+        save_entry("py-help", self.WEAK, tags=["coding", "debug"])
+        save_entry("essay-help", self.ESSAY, tags=["writing"])
+
+    def test_check_library_filters_any_match(self):
+        from promptsmith.check import check_library
+        self._tmp_cwd()
+        self._seed()
+        results = check_library(tags=["debug"])
+        self.assertEqual([r["name"] for r in results], ["py-help"])
+
+    def test_check_library_filter_is_case_insensitive(self):
+        from promptsmith.check import check_library
+        self._tmp_cwd()
+        self._seed()
+        results = check_library(tags=["CODING"])
+        self.assertEqual([r["name"] for r in results], ["py-help"])
+
+    def test_check_library_blank_tags_passes_everything(self):
+        from promptsmith.check import check_library
+        self._tmp_cwd()
+        self._seed()
+        self.assertEqual(len(check_library(tags=["", "  "])), 2)
+
+    def test_check_library_filter_keeps_recorded_best(self):
+        # the filter applies after scoring: a tagged name's best must count
+        # every version, not just the tagged ones
+        from promptsmith.check import check_library
+        self._tmp_cwd()
+        self._seed()
+        results = check_library(tags=["coding"])
+        self.assertEqual(results[0]["best"], 37)
+
+    def test_cli_check_filters_text(self):
+        self._tmp_cwd()
+        self._seed()
+        out = self._run(["check", "--tags", "coding"])
+        self.assertIn("py-help", out)
+        self.assertNotIn("essay-help", out)
+
+    def test_cli_check_no_match_is_honest(self):
+        self._tmp_cwd()
+        self._seed()
+        out = self._run(["check", "--tags", "music"])
+        self.assertIn("No saved prompts carry tag(s): music.", out)
+        self.assertIn("Saved tags: coding, debug, writing.", out)
+
+    def test_cli_check_json_filtered(self):
+        self._tmp_cwd()
+        self._seed()
+        data = json.loads(self._run(["check", "--tags", "writing",
+                                     "--json"]))
+        self.assertEqual([r["name"] for r in data["results"]],
+                         ["essay-help"])
+        self.assertEqual(data["checked"], 1)
+
+    def test_cli_check_name_with_matching_tag_shows(self):
+        self._tmp_cwd()
+        self._seed()
+        out = self._run(["check", "py-help", "--tags", "debug"])
+        self.assertIn("py-help", out)
+        self.assertIn("steady", out)
+
+    def test_cli_check_name_with_other_tag_is_honest(self):
+        self._tmp_cwd()
+        self._seed()
+        out = self._run(["check", "py-help", "--tags", "writing"])
+        self.assertIn('No versions of "py-help" carry tag(s): writing.', out)
+
+    def test_cli_check_fail_on_regression_respects_filter(self):
+        # a regressed prompt outside the filter must not fail CI
+        from promptsmith.cli import main
+        self._tmp_cwd()
+        os.makedirs(".promptsmith", exist_ok=True)
+        with open(".promptsmith/library.jsonl", "w",
+                  encoding="utf-8") as f:
+            f.write(json.dumps({"name": "bad-one", "version": 1,
+                                "score": 95, "prompt": self.WEAK,
+                                "tags": ["writing"]}) + "\n")
+        with contextlib.redirect_stdout(io.StringIO()):
+            main(["check", "--tags", "coding",
+                  "--fail-on-regression"])  # no exception = exit 0
+
+    def test_skill_mentions_check_tags(self):
+        from promptsmith.skills import render_skill
+        skill = render_skill()
+        self.assertIn("`check` (the regression guard; `--tags` scopes it",
+                      skill)
 
 
 class TestExport(unittest.TestCase):

@@ -26,7 +26,7 @@ from .skills import render_skill, write_skill
 from .templates import names, placeholders, render, TEMPLATES
 from .tokens import context_share, estimate_tokens, token_report
 
-__version__ = "1.23.0"
+__version__ = "1.24.0"
 __all__ = ["load_default", "predict_intent", "check_library", "check_name", "check_payload", "enhance", "improve_prompt", "what_improved", "score_prompt", "grade", "compare_prompts", "cost_estimate", "cost_report", "known_models", "word_diff", "diff_stats", "render_diff", "diff_payload", "export_json", "export_markdown", "export_payload", "render", "names", "placeholders", "TEMPLATES", "render_skill", "write_skill", "log_score", "load_history", "trend", "sparkline", "verdict", "save_entry", "load_library", "entries_for", "summarize", "filter_by_tags",
     "init_project", "estimate_tokens", "token_report", "context_share",
     "import_file", "import_payload", "stats_payload", "rollback_entry",

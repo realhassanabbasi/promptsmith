@@ -8,12 +8,13 @@ paste into docs, or back up:
 `promptsmith export NAME`             -> Markdown for one saved name
 `promptsmith export --format json`    -> JSON instead of Markdown
 `promptsmith export -o library.md`    -> write to a file instead of stdout
+`promptsmith export --tags coding`    -> only versions carrying that tag
 """
 
 import json
 from datetime import datetime, timezone
 
-from .library import entries_for, load_library
+from .library import entries_for, filter_by_tags, load_library
 
 
 def _best_text(record):
@@ -21,14 +22,23 @@ def _best_text(record):
     return record.get("enhanced") or record.get("prompt", "")
 
 
-def export_payload(records=None, name=None):
-    """Machine-readable export: metadata + entries. Pure data, no I/O."""
+def export_payload(records=None, name=None, tags=None):
+    """Machine-readable export: metadata + entries. Pure data, no I/O.
+
+    `tags` filters at the version level with the shared any-match,
+    case-insensitive rule (same as `library --tags` and `check --tags`):
+    a name is exported only with the versions that carry a wanted tag,
+    so the export holds exactly the tagged work — never a name's
+    untagged versions smuggled in beside it. Blank tags mean no filter.
+    """
     if records is None:
         records = load_library()
     if name:
         records = entries_for(name, records)
         if not records:
             return None
+    if tags:
+        records = filter_by_tags(records, tags)
     groups = {}
     for r in records:
         groups.setdefault(r.get("name", ""), []).append(r)
@@ -61,21 +71,21 @@ def export_payload(records=None, name=None):
     }
 
 
-def export_json(records=None, name=None):
+def export_json(records=None, name=None, tags=None):
     """JSON string of the library export. None when the name is unknown."""
-    payload = export_payload(records, name)
+    payload = export_payload(records, name, tags)
     if payload is None:
         return None
     return json.dumps(payload, indent=2, ensure_ascii=False)
 
 
-def export_markdown(records=None, name=None):
+def export_markdown(records=None, name=None, tags=None):
     """Render the library as a shareable Markdown document.
 
     Returns None when `name` matches nothing. Empty library yields an
     honest one-line document, not an exception.
     """
-    payload = export_payload(records, name)
+    payload = export_payload(records, name, tags)
     if payload is None:
         return None
     lines = ["# Prompt Library", ""]

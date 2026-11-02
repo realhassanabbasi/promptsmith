@@ -678,10 +678,32 @@ def cmd_cost(args):
 
 def cmd_export(args):
     records = load_library()
+    wanted = [t.strip() for t in (args.tags.split(",") if args.tags else [])
+              if t.strip()]
+    if args.name:
+        versions = entries_for(args.name, records)
+        if not versions:
+            print(f"No saved prompt named \"{args.name}\".")
+            return
+        if wanted and not filter_by_tags(versions, wanted):
+            print(f"No versions of \"{args.name}\" carry tag(s): "
+                  f"{', '.join(wanted)}.")
+            return
+    elif wanted and records:
+        if not filter_by_tags(records, wanted):
+            known = []
+            for r in records:
+                for t in r.get("tags") or []:
+                    if t not in known:
+                        known.append(t)
+            print(f"No saved prompts carry tag(s): {', '.join(wanted)}.")
+            if known:
+                print(f"Saved tags: {', '.join(known)}.")
+            return
     if args.format == "json":
-        out = export_json(records, args.name)
+        out = export_json(records, args.name, wanted)
     else:
-        out = export_markdown(records, args.name)
+        out = export_markdown(records, args.name, wanted)
     if out is None:
         print(f"No saved prompt named \"{args.name}\".")
         return
@@ -917,6 +939,9 @@ def build_parser():
                     help="Output format (default: md)")
     ex.add_argument("-o", "--output", default=None,
                     help="Write to FILE instead of stdout")
+    ex.add_argument("--tags", metavar="TAGS",
+                    help="Export only versions carrying one of these tags "
+                    "(comma-separated, any match)")
     ex.set_defaults(func=cmd_export)
 
     im = sub.add_parser("import", help="Import a promptsmith JSON export into the library")

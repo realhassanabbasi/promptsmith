@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Deps](https://img.shields.io/badge/dependencies-zero-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-218%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-228%20passing-brightgreen?style=flat-square)
 [![Live demo](https://img.shields.io/badge/demo-live%20in%20browser-black?style=flat-square)](https://realhassanabbasi.github.io/promptsmith/)
 
 **Turn rough prompts into engineered ones.** Paste in *"help me with python"*, get back a structured prompt with a role, context slots, requirements, output format, and guardrails — scored before and after. Works **offline**, with **zero dependencies**.
@@ -29,7 +29,7 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 - **`stats`** — the whole picture in one glance: total runs and prompts tracked, average/best/worst score, per-intent averages, and library totals (names, versions, best prompt) — `report` shows trends per prompt, `stats` shows the project (`--json` for dashboards)
 - **`library`** — save named prompts as versioned library entries (`save NAME "prompt"`; `--improve` saves the enhanced version too): `library` lists each name's versions/last/best, `library NAME` shows its full version history — your best-scoring prompt is always one glance away (`--tags`, `--json`). Re-saving the exact same prompt text under the same name is refused (it would only double an entry) unless `--force` is given; rollback is exempt, since restoring a version is intentional
 - **`check`** — regression guard for your saved library: re-scores every prompt against its recorded best and flags regressions (rubric upgrades can't silently change what your prompts score); `--fail-on-regression` exits 1 for CI, `--tags a,b` scopes the guard to one tag (so CI can guard just the production prompts), `--json` for dashboards
-- **`export`** — share your prompt library: `export` prints it as Markdown (one section per prompt, versions with scores and improved text), `--format json` for machine-readable output, `-o FILE` to write to a file, `export NAME` for a single prompt
+- **`export`** — share your prompt library: `export` prints it as Markdown (one section per prompt, versions with scores and improved text), `--format json` for machine-readable output, `-o FILE` to write to a file, `export NAME` for a single prompt, `--tags a,b` to export only the versions carrying a tag (so a team gets just the coding prompts, not the whole library)
 - **`import`** — bring a shared library back in: `import FILE` reads a `export --format json` file into your library — scores preserved exactly as exported, duplicates skipped (never doubled), existing names continue their version numbers (`--json` for scripts)
 - **`rollback`** — restore any saved version as a new version: `rollback NAME` brings back the previous version, `rollback NAME --to 2` restores version 2 — history is never rewritten, so a rollback is always undoable, and the restored prompt is scored fresh under the current rubric (`--json` for scripts)
 - **`search`** — find a saved prompt without remembering its name: `search QUERY` matches names, prompt text, improved text, and tags (case-insensitive), one row per name with versions/last/best and what matched; `--tags a,b` narrows to names carrying a tag (`--json` for scripts)
@@ -95,6 +95,7 @@ promptsmith check --fail-on-regression   # for CI: exits 1 on any regression
 promptsmith export
 promptsmith export -o library.md
 promptsmith export --format json
+promptsmith export --tags coding   # only the versions carrying that tag
 
 # bring a teammate's shared library back into yours
 promptsmith import shared.json
@@ -561,6 +562,37 @@ $ promptsmith export --format json | head -12
 stdout. The Markdown is ready to paste into docs or share with a team;
 the JSON has the full version history for scripts and backups.
 
+## Scope the export
+
+Real output — the same any-match, case-insensitive `--tags` rule as
+`library` and `check`, but at the version level: a name is exported only
+with the versions that carry a wanted tag, so untagged versions never
+ride along. A miss is honest, not empty:
+
+```
+$ promptsmith export --tags coding
+
+# Prompt Library
+
+_Exported 2026-11-01 with promptsmith._
+
+## py-help (1 version(s), best 37/100)
+
+### v1 — 37/100 (weak) — 2026-11-01
+
+> help me with python
+
+_Tags: coding_
+
+$ promptsmith export --tags music
+No saved prompts carry tag(s): music.
+Saved tags: coding, poetry.
+```
+
+`export NAME --tags coding` keeps that name's history only if one of its
+versions carries the tag, and refuses honestly otherwise — no silent
+flag-ignoring anywhere.
+
 ## Import
 
 Real output — the round trip: a teammate exports, you import, nothing
@@ -880,7 +912,7 @@ promptsmith/
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 218 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete, rename, duplicate-guard, library-tags, check-tags)
+│   └── test_promptsmith.py  # 228 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete, rename, duplicate-guard, library-tags, check-tags, export-tags)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

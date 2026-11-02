@@ -307,9 +307,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_24_0(self):
+    def test_version_is_1_25_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.24.0")
+        self.assertEqual(promptsmith.__version__, "1.25.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -1352,6 +1352,104 @@ class TestExport(unittest.TestCase):
         self.assertTrue(os.path.isfile("lib.md"))
         with open("lib.md", encoding="utf-8") as f:
             self.assertIn("## py-help", f.read())
+
+
+class TestExportTags(unittest.TestCase):
+    def _tmp_cwd(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        prev = os.getcwd()
+        os.chdir(tmp.name)
+        self.addCleanup(os.chdir, prev)
+
+    def _run(self, argv):
+        from promptsmith.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(argv)
+        return buf.getvalue()
+
+    def _seed(self):
+        from promptsmith.library import save_entry
+        save_entry("py-help", "help me with python", tags=["coding"])
+        save_entry("py-help", "help me with python 3",
+                   tags=["coding"])
+        save_entry("poem", "write a poem about rain", tags=["poetry"])
+        save_entry("plain", "help me write an essay")
+
+    def test_payload_filters_any_match(self):
+        from promptsmith.export import export_payload
+        self._tmp_cwd()
+        self._seed()
+        payload = export_payload(tags=["coding"])
+        self.assertEqual([p["name"] for p in payload["prompts"]],
+                         ["py-help"])
+
+    def test_payload_filter_case_insensitive(self):
+        from promptsmith.export import export_payload
+        self._tmp_cwd()
+        self._seed()
+        payload = export_payload(tags=["CODING"])
+        self.assertEqual(payload["count"], 1)
+
+    def test_payload_blank_tags_pass_everything(self):
+        from promptsmith.export import export_payload
+        self._tmp_cwd()
+        self._seed()
+        self.assertEqual(export_payload(tags=["", "  "])["count"], 3)
+
+    def test_payload_version_level_not_name_level(self):
+        from promptsmith.export import export_payload
+        from promptsmith.library import save_entry
+        self._tmp_cwd()
+        save_entry("mixed", "help me with python")
+        save_entry("mixed", "help me with python 3", tags=["coding"])
+        payload = export_payload(tags=["coding"])
+        entries = payload["prompts"][0]["entries"]
+        self.assertEqual([e["version"] for e in entries], [2])
+
+    def test_cli_text_filter(self):
+        self._tmp_cwd()
+        self._seed()
+        out = self._run(["export", "--tags", "coding"])
+        self.assertIn("## py-help", out)
+        self.assertNotIn("## poem", out)
+        self.assertNotIn("## plain", out)
+
+    def test_cli_no_match_message_and_saved_tags(self):
+        self._tmp_cwd()
+        self._seed()
+        out = self._run(["export", "--tags", "music"])
+        self.assertIn("No saved prompts carry tag(s): music.", out)
+        self.assertIn("Saved tags: coding, poetry.", out)
+
+    def test_cli_json_filtered(self):
+        self._tmp_cwd()
+        self._seed()
+        out = self._run(["export", "--tags", "poetry",
+                         "--format", "json"])
+        data = json.loads(out)
+        self.assertEqual([p["name"] for p in data["prompts"]],
+                         ["poem"])
+
+    def test_cli_name_plus_matching_tag(self):
+        self._tmp_cwd()
+        self._seed()
+        out = self._run(["export", "py-help", "--tags", "coding"])
+        self.assertIn("## py-help", out)
+
+    def test_cli_name_plus_other_tag_refusal(self):
+        self._tmp_cwd()
+        self._seed()
+        out = self._run(["export", "py-help", "--tags", "poetry"])
+        self.assertIn('No versions of "py-help" carry tag(s): poetry.',
+                      out)
+
+    def test_skill_mentions_export_tags(self):
+        from promptsmith.skills import render_skill
+        self.assertIn("export", render_skill())
+        self.assertIn("`--tags` shares only the tagged versions",
+                      render_skill())
 
 
 class TestInit(unittest.TestCase):

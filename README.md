@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Deps](https://img.shields.io/badge/dependencies-zero-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-238%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-248%20passing-brightgreen?style=flat-square)
 [![Live demo](https://img.shields.io/badge/demo-live%20in%20browser-black?style=flat-square)](https://realhassanabbasi.github.io/promptsmith/)
 
 **Turn rough prompts into engineered ones.** Paste in *"help me with python"*, get back a structured prompt with a role, context slots, requirements, output format, and guardrails — scored before and after. Works **offline**, with **zero dependencies**.
@@ -28,6 +28,7 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 - **`history`** — log scored runs (`score`/`compare --log`) and print per-prompt trend reports (`report`): runs, averages, sparklines, and an improving/steady/slipping verdict (`--json` for dashboards)
 - **`stats`** — the whole picture in one glance: total runs and prompts tracked, average/best/worst score, per-intent averages, and library totals (names, versions, best prompt) — `report` shows trends per prompt, `stats` shows the project (`--tags a,b` scopes both halves to one tag, `--json` for dashboards)
 - **`library`** — save named prompts as versioned library entries (`save NAME "prompt"`; `--improve` saves the enhanced version too): `library` lists each name's versions/last/best, `library NAME` shows its full version history — your best-scoring prompt is always one glance away (`--tags`, `--json`). Re-saving the exact same prompt text under the same name is refused (it would only double an entry) unless `--force` is given; rollback is exempt, since restoring a version is intentional
+- **`tags`** — list every tag in the library with its counts: how many prompt names carry it, how many versions carry it, and the best score among them — so you filter by a tag that exists instead of guessing one (`--json` for scripts). An empty library gets an honest one-liner, not an empty table
 - **`check`** — regression guard for your saved library: re-scores every prompt against its recorded best and flags regressions (rubric upgrades can't silently change what your prompts score); `--fail-on-regression` exits 1 for CI, `--tags a,b` scopes the guard to one tag (so CI can guard just the production prompts), `--json` for dashboards
 - **`export`** — share your prompt library: `export` prints it as Markdown (one section per prompt, versions with scores and improved text), `--format json` for machine-readable output, `-o FILE` to write to a file, `export NAME` for a single prompt, `--tags a,b` to export only the versions carrying a tag (so a team gets just the coding prompts, not the whole library)
 - **`import`** — bring a shared library back in: `import FILE` reads a `export --format json` file into your library — scores preserved exactly as exported, duplicates skipped (never doubled), existing names continue their version numbers (`--json` for scripts)
@@ -87,6 +88,7 @@ promptsmith report
 promptsmith save py-help "help me with python" --tags coding,debug
 promptsmith library
 promptsmith library --tags coding   # only names carrying that tag
+promptsmith tags   # every tag with its counts — discover before you filter
 
 # guard the library — flag anything that regressed since it was saved
 promptsmith check
@@ -517,6 +519,27 @@ A miss names the tags that do exist, so you can retry instead of guessing.
 `library NAME --tags ...` shows that name's history only if it carries one
 of the tags, and says so plainly when it doesn't.
 
+## List every tag
+
+Real output — `tags` answers "what tags do I even have?" before you filter
+by one. Counts are per tag: names carrying it, versions carrying it, and
+the best score among those versions. Tag matching is case-insensitive
+(the same rule as `--tags`), so `Coding` and `coding` count as one tag:
+
+```
+$ promptsmith tags
+
+Tags — 3 tagged version(s), 3 tag(s)
+
+  tag                      names versions best
+  coding                       1        1 37/100
+  debug                        1        1 37/100
+  writing                      1        1 37/100
+```
+
+`tags --json` gives the same rows for scripts. An empty library prints
+"No tags yet — save a prompt with --tags to start tagging."
+
 ## Duplicate guard
 
 Real output — an exact duplicate under the same name is refused, not silently doubled:
@@ -933,7 +956,7 @@ promptsmith/
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 238 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete, rename, duplicate-guard, library-tags, check-tags, export-tags, stats-tags)
+│   └── test_promptsmith.py  # 248 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete, rename, duplicate-guard, library-tags, check-tags, export-tags, stats-tags, tags)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

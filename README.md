@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Deps](https://img.shields.io/badge/dependencies-zero-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-228%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-238%20passing-brightgreen?style=flat-square)
 [![Live demo](https://img.shields.io/badge/demo-live%20in%20browser-black?style=flat-square)](https://realhassanabbasi.github.io/promptsmith/)
 
 **Turn rough prompts into engineered ones.** Paste in *"help me with python"*, get back a structured prompt with a role, context slots, requirements, output format, and guardrails — scored before and after. Works **offline**, with **zero dependencies**.
@@ -26,7 +26,7 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 - **`compare`** — put two prompt versions head-to-head: scores, per-check deltas, a winner verdict, and what the loser should fix first (`--json` for scripts)
 - **`diff`** — show exactly what changed, word by word: `diff A.txt B.txt` on its own, or `--diff` on `enhance` and `compare` so a score gain is backed by visible edits (`--json` for scripts)
 - **`history`** — log scored runs (`score`/`compare --log`) and print per-prompt trend reports (`report`): runs, averages, sparklines, and an improving/steady/slipping verdict (`--json` for dashboards)
-- **`stats`** — the whole picture in one glance: total runs and prompts tracked, average/best/worst score, per-intent averages, and library totals (names, versions, best prompt) — `report` shows trends per prompt, `stats` shows the project (`--json` for dashboards)
+- **`stats`** — the whole picture in one glance: total runs and prompts tracked, average/best/worst score, per-intent averages, and library totals (names, versions, best prompt) — `report` shows trends per prompt, `stats` shows the project (`--tags a,b` scopes both halves to one tag, `--json` for dashboards)
 - **`library`** — save named prompts as versioned library entries (`save NAME "prompt"`; `--improve` saves the enhanced version too): `library` lists each name's versions/last/best, `library NAME` shows its full version history — your best-scoring prompt is always one glance away (`--tags`, `--json`). Re-saving the exact same prompt text under the same name is refused (it would only double an entry) unless `--force` is given; rollback is exempt, since restoring a version is intentional
 - **`check`** — regression guard for your saved library: re-scores every prompt against its recorded best and flags regressions (rubric upgrades can't silently change what your prompts score); `--fail-on-regression` exits 1 for CI, `--tags a,b` scopes the guard to one tag (so CI can guard just the production prompts), `--json` for dashboards
 - **`export`** — share your prompt library: `export` prints it as Markdown (one section per prompt, versions with scores and improved text), `--format json` for machine-readable output, `-o FILE` to write to a file, `export NAME` for a single prompt, `--tags a,b` to export only the versions carrying a tag (so a team gets just the coding prompts, not the whole library)
@@ -66,6 +66,7 @@ promptsmith batch my_prompts.txt --enhance   # also enhances each, saves my_prom
 
 # project totals across history and library
 promptsmith stats
+promptsmith stats --tags coding   # just the coding prompts
 
 # machine-readable output for scripts and pipelines
 promptsmith score "help me with python" --json
@@ -430,6 +431,26 @@ Project stats
 per-intent lines only cover runs logged with this version — older records
 (with no intent stored) are counted in the totals but not in any intent row.
 `stats --json` gives the same totals as JSON for dashboards.
+
+Scope it to one tag — the library is filtered version by version, and
+history runs count when their prompt text matches a tagged saved version
+(history records carry no tags of their own, so the prompt-text match is
+the link):
+
+```
+$ promptsmith stats --tags coding
+
+Project stats — tag(s): coding
+
+  Score history — 1 runs, 1 prompt(s) tracked
+    average 37.0   best 37 (help me with python)   worst 37 (help me with python)
+    code: 1 runs, avg 37.0
+  Library — 1 name(s), 1 version(s)
+    best 37 (py-help)
+```
+
+A tag no saved prompt carries prints `No saved prompts carry tag(s): music.`
+plus the saved tags, exactly like `library`/`check`/`export --tags`.
 
 ## Prompt library
 
@@ -912,7 +933,7 @@ promptsmith/
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 228 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete, rename, duplicate-guard, library-tags, check-tags, export-tags)
+│   └── test_promptsmith.py  # 238 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete, rename, duplicate-guard, library-tags, check-tags, export-tags, stats-tags)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

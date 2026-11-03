@@ -334,8 +334,28 @@ def cmd_report(args):
 
 
 def cmd_stats(args):
-    """One global view: history totals + library totals."""
-    payload = stats_payload()
+    """One global view: history totals + library totals.
+
+    With --tags, both halves are scoped to the tag (see stats_payload);
+    a tag no saved prompt carries prints an honest miss message with the
+    saved tags, exactly like `library`/`check`/`export --tags`.
+    """
+    wanted = [t.strip() for t in (args.tags.split(",") if args.tags else [])
+              if t.strip()]
+    if wanted:
+        lib_records = load_library()
+        if not filter_by_tags(lib_records, wanted) and (
+                lib_records or load_history()):
+            known = []
+            for r in lib_records:
+                for t in r.get("tags") or []:
+                    if t not in known:
+                        known.append(t)
+            print(f"No saved prompts carry tag(s): {', '.join(wanted)}.")
+            if known:
+                print(f"Saved tags: {', '.join(known)}.")
+            return
+    payload = stats_payload(tags=wanted)
     if not payload["has_data"]:
         print("No data yet — run `promptsmith score \"...\" --log` or "
               "`promptsmith save NAME \"...\"` to start tracking.")
@@ -344,7 +364,8 @@ def cmd_stats(args):
         print(json.dumps(payload, indent=2))
         return
     h, lib = payload["history"], payload["library"]
-    print(f"\n{bold('Project stats')}\n")
+    scope = f" — tag(s): {', '.join(wanted)}" if wanted else ""
+    print(f"\n{bold('Project stats')}{scope}\n")
     print(f"  Score history — {h['runs']} runs, {h['prompts']} prompt(s) tracked")
     if h["runs"]:
         print(f"    average {h['average']:.1f}   best {h['best']} "
@@ -838,6 +859,10 @@ def build_parser():
     r.set_defaults(func=cmd_report)
 
     st = sub.add_parser("stats", help="Show project totals across history and library")
+    st.add_argument("--tags", metavar="TAGS",
+                    help="Scope the totals to saved prompts carrying a tag "
+                         "(history runs count when their prompt text matches "
+                         "a tagged saved version)")
     st.add_argument("--json", action="store_true",
                     help="Print the totals as machine-readable JSON")
     st.set_defaults(func=cmd_stats)

@@ -4,10 +4,17 @@
 questions: how much have I tracked, what is my average, what is my best
 and worst, and how big is the library. History records and library
 entries are the single source of truth — nothing is re-scored here.
+
+`stats --tags` scopes both halves with the shared any-match,
+case-insensitive rule: the library is filtered version-by-version (a name
+counts only with its tagged versions), and history is scoped by prompt
+text — a logged run counts when its prompt text matches a saved version
+carrying the tag. History records carry no tags of their own, so the
+prompt-text match is the honest link between a run and a tag.
 """
 
 from .history import load_history
-from .library import load_library, summarize
+from .library import filter_by_tags, load_library, summarize
 
 
 def _short(prompt, limit=40):
@@ -16,10 +23,24 @@ def _short(prompt, limit=40):
     return prompt[:limit] + ("…" if len(prompt) > limit else "")
 
 
-def stats_payload(cwd=None):
-    """Aggregate history + library into one machine-readable dict."""
-    records = load_history(cwd)
-    lib_rows = summarize(load_library(cwd), cwd)
+def stats_payload(cwd=None, tags=None):
+    """Aggregate history + library into one machine-readable dict.
+
+    `tags` (a list) scopes both halves as described in the module
+    docstring; blank/empty tags mean no filtering. When tags are given,
+    the payload gains a "tags" key naming the scope; unscoped payloads
+    keep the original three keys.
+    """
+    wanted = [t.strip() for t in (tags or []) if t.strip()]
+    lib_records = load_library(cwd)
+    if wanted:
+        lib_records = filter_by_tags(lib_records, wanted)
+        tagged_prompts = {r.get("prompt") for r in lib_records}
+        records = [r for r in load_history(cwd)
+                   if r.get("prompt") in tagged_prompts]
+    else:
+        records = load_history(cwd)
+    lib_rows = summarize(lib_records, cwd)
 
     scores = [r["score"] for r in records if "score" in r]
     by_intent = {}
@@ -56,8 +77,11 @@ def stats_payload(cwd=None):
         "best": best_lib["best"] if best_lib else None,
         "best_name": best_lib["name"] if best_lib else None,
     }
-    return {
+    payload = {
         "history": history,
         "library": library,
         "has_data": bool(records or lib_rows),
     }
+    if wanted:
+        payload["tags"] = wanted
+    return payload

@@ -307,9 +307,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_25_0(self):
+    def test_version_is_1_26_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.25.0")
+        self.assertEqual(promptsmith.__version__, "1.26.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -1749,6 +1749,157 @@ class TestStats(unittest.TestCase):
         self.assertEqual(len(recs), 1)
         self.assertIsInstance(recs[0]["intent"], str)
         self.assertTrue(recs[0]["intent"])
+
+
+class TestStatsTags(unittest.TestCase):
+    def _tmp_cwd(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        prev = os.getcwd()
+        os.chdir(tmp.name)
+        self.addCleanup(os.chdir, prev)
+
+    def _write_library(self, rows):
+        os.makedirs(".promptsmith", exist_ok=True)
+        with open(".promptsmith/library.jsonl", "w", encoding="utf-8") as f:
+            for r in rows:
+                f.write(json.dumps(r) + "\n")
+
+    def test_library_filter_is_version_level(self):
+        from promptsmith.stats import stats_payload
+        self._tmp_cwd()
+        self._write_library([
+            {"name": "a", "version": 1, "score": 40,
+             "prompt": "p-a1", "tags": []},
+            {"name": "a", "version": 2, "score": 90,
+             "prompt": "p-a2", "tags": ["coding"]},
+            {"name": "b", "version": 1, "score": 70,
+             "prompt": "p-b1", "tags": ["poetry"]},
+        ])
+        lib = stats_payload(tags=["coding"])["library"]
+        self.assertEqual(lib["names"], 1)
+        self.assertEqual(lib["versions"], 1)
+        self.assertEqual(lib["best"], 90)
+        self.assertEqual(lib["best_name"], "a")
+
+    def test_history_scoped_by_prompt_text(self):
+        from promptsmith.history import log_score
+        from promptsmith.stats import stats_payload
+        self._tmp_cwd()
+        self._write_library([
+            {"name": "a", "version": 1, "score": 90,
+             "prompt": "tagged prompt", "tags": ["coding"]},
+            {"name": "b", "version": 1, "score": 70,
+             "prompt": "other prompt", "tags": ["poetry"]},
+        ])
+        log_score("tagged prompt", 90, intent="code")
+        log_score("other prompt", 70, intent="code")
+        h = stats_payload(tags=["coding"])["history"]
+        self.assertEqual(h["runs"], 1)
+        self.assertEqual(h["prompts"], 1)
+        self.assertEqual(h["average"], 90.0)
+        self.assertEqual(h["best_prompt"], "tagged prompt")
+        self.assertEqual(h["by_intent"]["code"], {"runs": 1, "average": 90.0})
+
+    def test_tags_case_insensitive_any_match(self):
+        from promptsmith.stats import stats_payload
+        self._tmp_cwd()
+        self._write_library([
+            {"name": "a", "version": 1, "score": 80,
+             "prompt": "p-a", "tags": ["Coding"]},
+            {"name": "b", "version": 1, "score": 70,
+             "prompt": "p-b", "tags": ["poetry"]},
+        ])
+        lib = stats_payload(tags=["CODING", "music"])["library"]
+        self.assertEqual(lib["names"], 1)
+        self.assertEqual(lib["best_name"], "a")
+
+    def test_blank_tags_pass_everything(self):
+        from promptsmith.stats import stats_payload
+        self._tmp_cwd()
+        self._write_library([
+            {"name": "a", "version": 1, "score": 80,
+             "prompt": "p-a", "tags": ["coding"]},
+        ])
+        p = stats_payload(tags=[" ", ""])
+        self.assertEqual(p["library"]["names"], 1)
+        self.assertNotIn("tags", p)
+
+    def test_cli_text_filtered(self):
+        from promptsmith.cli import main
+        from promptsmith.history import log_score
+        self._tmp_cwd()
+        self._write_library([
+            {"name": "a", "version": 1, "score": 90,
+             "prompt": "tagged prompt", "tags": ["coding"]},
+        ])
+        log_score("tagged prompt", 90)
+        log_score("untracked prompt", 30)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(["stats", "--tags", "coding"])
+        out = buf.getvalue()
+        self.assertIn("tag(s): coding", out)
+        self.assertIn("1 runs", out)
+        self.assertIn("best 90", out)
+
+    def test_cli_library_only_still_has_data(self):
+        from promptsmith.cli import main
+        self._tmp_cwd()
+        self._write_library([
+            {"name": "a", "version": 1, "score": 90,
+             "prompt": "p-a", "tags": ["coding"]},
+        ])
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(["stats", "--tags", "coding"])
+        out = buf.getvalue()
+        self.assertIn("Library — 1 name(s), 1 version(s)", out)
+        self.assertIn("0 runs", out)
+
+    def test_cli_miss_message_lists_saved_tags(self):
+        from promptsmith.cli import main
+        self._tmp_cwd()
+        self._write_library([
+            {"name": "a", "version": 1, "score": 80,
+             "prompt": "p-a", "tags": ["coding"]},
+        ])
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(["stats", "--tags", "music"])
+        out = buf.getvalue()
+        self.assertIn("No saved prompts carry tag(s): music.", out)
+        self.assertIn("Saved tags: coding.", out)
+
+    def test_cli_empty_data_message(self):
+        from promptsmith.cli import main
+        self._tmp_cwd()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(["stats", "--tags", "coding"])
+        self.assertIn("No data yet", buf.getvalue())
+
+    def test_cli_json_filtered_with_tags_field(self):
+        from promptsmith.cli import main
+        from promptsmith.history import log_score
+        self._tmp_cwd()
+        self._write_library([
+            {"name": "a", "version": 1, "score": 90,
+             "prompt": "tagged prompt", "tags": ["coding"]},
+        ])
+        log_score("tagged prompt", 90)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(["stats", "--tags", "coding", "--json"])
+        data = json.loads(buf.getvalue())
+        self.assertEqual(data["tags"], ["coding"])
+        self.assertEqual(data["history"]["runs"], 1)
+        self.assertEqual(data["library"]["names"], 1)
+
+    def test_skill_mentions_stats_tags(self):
+        md = render_skill()
+        self.assertIn("`stats`", md)
+        self.assertIn("`--tags` scopes it to one tag", md)
 
 
 class TestRollback(unittest.TestCase):

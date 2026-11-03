@@ -307,9 +307,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_26_0(self):
+    def test_version_is_1_27_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.26.0")
+        self.assertEqual(promptsmith.__version__, "1.27.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -2543,6 +2543,106 @@ class TestLibraryTags(unittest.TestCase):
     def test_skill_mentions_library_tags(self):
         md = render_skill()
         self.assertIn("--tags", md)
+
+
+class TestTags(unittest.TestCase):
+    WEAK = "help me with python"
+    ESSAY = "help me write an essay about climate change"
+
+    def _tmp_cwd(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        prev = os.getcwd()
+        os.chdir(tmp.name)
+        self.addCleanup(os.chdir, prev)
+
+    def _run(self, argv):
+        from promptsmith.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(argv)
+        return buf.getvalue()
+
+    def _seed(self):
+        from promptsmith.library import save_entry
+        save_entry("py-help", self.WEAK, tags=["coding", "debug"])
+        save_entry("py-help", self.WEAK + " please", tags=["coding"])
+        save_entry("essay-help", self.ESSAY, tags=["writing"])
+        save_entry("plain-help", self.WEAK)
+
+    def test_counts_names_versions_best(self):
+        from promptsmith.library import tag_summary
+        self._tmp_cwd()
+        self._seed()
+        rows = {r["tag"]: r for r in tag_summary()}
+        self.assertEqual(rows["coding"]["names"], 1)
+        self.assertEqual(rows["coding"]["versions"], 2)
+        self.assertEqual(rows["debug"]["names"], 1)
+        self.assertEqual(rows["debug"]["versions"], 1)
+        self.assertEqual(rows["writing"]["versions"], 1)
+        self.assertNotIn("plain-help", [r["tag"] for r in tag_summary()])
+
+    def test_versions_count_only_tagged(self):
+        from promptsmith.library import tag_summary
+        self._tmp_cwd()
+        self._seed()
+        rows = {r["tag"]: r for r in tag_summary()}
+        # py-help has 2 versions but only the tagged ones count per tag.
+        self.assertEqual(rows["debug"]["versions"], 1)
+        self.assertEqual(rows["coding"]["versions"], 2)
+
+    def test_case_insensitive_grouping(self):
+        from promptsmith.library import tag_summary, save_entry
+        self._tmp_cwd()
+        save_entry("a-help", self.WEAK, tags=["Coding"])
+        save_entry("b-help", self.ESSAY, tags=["CODING"])
+        rows = tag_summary()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["tag"], "Coding")
+        self.assertEqual(rows[0]["names"], 2)
+        self.assertEqual(rows[0]["versions"], 2)
+
+    def test_sorted_most_used_first(self):
+        from promptsmith.library import tag_summary
+        self._tmp_cwd()
+        self._seed()
+        tags = [r["tag"] for r in tag_summary()]
+        self.assertEqual(tags[0], "coding")
+        self.assertEqual(tags[1:], ["debug", "writing"])
+
+    def test_empty_library(self):
+        from promptsmith.library import tag_summary
+        self._tmp_cwd()
+        self.assertEqual(tag_summary(), [])
+
+    def test_cli_text_lists_tags(self):
+        self._tmp_cwd()
+        self._seed()
+        out = self._run(["tags"])
+        self.assertIn("coding", out)
+        self.assertIn("debug", out)
+        self.assertIn("writing", out)
+
+    def test_cli_json_schema(self):
+        self._tmp_cwd()
+        self._seed()
+        rows = json.loads(self._run(["tags", "--json"]))
+        coding = [r for r in rows if r["tag"] == "coding"][0]
+        self.assertEqual((coding["names"], coding["versions"]), (1, 2))
+        self.assertIn("best", coding)
+
+    def test_cli_empty_is_honest(self):
+        self._tmp_cwd()
+        out = self._run(["tags"])
+        self.assertIn("No tags yet", out)
+
+    def test_skill_mentions_tags_command(self):
+        md = render_skill()
+        self.assertIn("`tags` lists every tag", md)
+
+    def test_tags_exported(self):
+        import promptsmith
+        self.assertIn("tag_summary", promptsmith.__all__)
 
 
 if __name__ == "__main__":

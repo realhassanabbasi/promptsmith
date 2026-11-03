@@ -17,7 +17,7 @@ from .history import load_history, log_score, trend, verdict
 from .improve import improve_prompt, what_improved
 from .init import init_project
 from .library import (entries_for, filter_by_tags, library_path,
-                      load_library, save_entry, summarize)
+                      load_library, save_entry, summarize, tag_summary)
 from .rename import rename_entry
 from .rollback import rollback_entry
 from .search import search_library
@@ -499,6 +499,25 @@ def cmd_library(args):
     print()
 
 
+def cmd_tags(args):
+    rows = tag_summary()
+    if not rows:
+        print("No tags yet — save a prompt with --tags to start tagging.")
+        return
+    if args.json:
+        print(json.dumps(rows, indent=2))
+        return
+    total = sum(r["versions"] for r in rows)
+    print(f"\n{bold('Tags')} — {total} tagged version(s), "
+          f"{len(rows)} tag(s)\n")
+    print(f"  {'tag':24} {'names':>5} {'versions':>8} {'best':>4}")
+    for r in rows:
+        best = f"{r['best']}/100" if r["best"] is not None else "—"
+        print(f"  {r['tag'][:24]:24} {r['names']:>5} {r['versions']:>8} "
+              f"{best:>4}")
+    print()
+
+
 def cmd_rollback(args):
     """Restore a saved version as a new version (history never rewritten)."""
     try:
@@ -901,6 +920,11 @@ def build_parser():
     lb.add_argument("--json", action="store_true",
                     help="Print as machine-readable JSON")
     lb.set_defaults(func=cmd_library)
+
+    tg = sub.add_parser("tags", help="List every tag in the library with counts")
+    tg.add_argument("--json", action="store_true",
+                    help="Print as machine-readable JSON")
+    tg.set_defaults(func=cmd_tags)
 
     rb = sub.add_parser("rollback", help="Restore a saved version as a new version")
     rb.add_argument("name", help="Saved prompt name to roll back")

@@ -153,3 +153,40 @@ def filter_by_tags(rows, tags):
         return list(rows)
     return [r for r in rows
             if any(t.lower() in wanted for t in (r.get("tags") or []))]
+
+
+def tag_summary(records=None, cwd=None):
+    """One row per tag in the library: names, versions, best score.
+
+    Tag matching is case-insensitive, the same rule as `filter_by_tags`:
+    "Coding" and "coding" are one tag, shown under the first-seen
+    spelling. `names` counts distinct prompt names with at least one
+    version carrying the tag; `versions` counts only the versions that
+    carry it, so a name with mixed tagged/untagged versions contributes
+    just its tagged ones. Rows sort by versions, most-used first.
+    """
+    if records is None:
+        records = load_library(cwd)
+    grouped = {}
+    for r in records:
+        for t in r.get("tags") or []:
+            key = t.strip().lower()
+            if not key:
+                continue
+            row = grouped.setdefault(key, {"tag": t.strip(),
+                                           "names": set(),
+                                           "versions": 0,
+                                           "best": None})
+            row["names"].add(r.get("name", ""))
+            row["versions"] += 1
+            score = r.get("score")
+            if score is not None and (row["best"] is None
+                                      or score > row["best"]):
+                row["best"] = score
+    rows = [{"tag": row["tag"],
+             "names": len(row["names"]),
+             "versions": row["versions"],
+             "best": row["best"]}
+            for row in grouped.values()]
+    rows.sort(key=lambda r: (-r["versions"], r["tag"].lower()))
+    return rows

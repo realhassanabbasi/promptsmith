@@ -307,9 +307,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_27_0(self):
+    def test_version_is_1_28_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.27.0")
+        self.assertEqual(promptsmith.__version__, "1.28.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -2647,3 +2647,102 @@ class TestTags(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestBatchLog(unittest.TestCase):
+    """v1.28.0: batch --log feeds score history like score/compare do."""
+
+    def _tmp_cwd(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        prev = os.getcwd()
+        os.chdir(tmp.name)
+        self.addCleanup(os.chdir, prev)
+
+    def _write_prompts(self, text):
+        with tempfile.NamedTemporaryFile("w", suffix=".txt",
+                                         delete=False, dir=".") as f:
+            f.write(text)
+            return f.name
+
+    def _run(self, argv):
+        from promptsmith.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(argv)
+        return buf.getvalue()
+
+    def test_batch_log_writes_one_record_per_prompt(self):
+        from promptsmith.history import load_history
+        from promptsmith.scorer import score_prompt
+        self._tmp_cwd()
+        path = self._write_prompts(
+            "help me with python\n\n"
+            "Write a cover letter for a data science internship. "
+            "Keep it under 250 words. Tone: confident.\n")
+        try:
+            self._run(["batch", path, "--log"])
+            recs = load_history()
+            self.assertEqual(len(recs), 2)  # blank line skipped, not logged
+            self.assertEqual([r["prompt"] for r in recs],
+                             ["help me with python",
+                              "Write a cover letter for a data science "
+                              "internship. Keep it under 250 words. Tone: "
+                              "confident."])
+            self.assertEqual(recs[0]["score"],
+                             score_prompt("help me with python")[0])
+        finally:
+            os.unlink(path)
+
+    def test_batch_log_with_enhance_writes_both_runs(self):
+        from promptsmith.history import load_history
+        self._tmp_cwd()
+        path = self._write_prompts("help me with python\n")
+        try:
+            out = self._run(["batch", path, "--enhance", "--log"])
+            recs = load_history()
+            self.assertEqual(len(recs), 2)  # draft + enhanced rewrite
+            self.assertEqual(recs[0]["prompt"], "help me with python")
+            self.assertGreater(recs[1]["score"], recs[0]["score"])
+            self.assertIn("Logged: 2 run(s)", out)
+        finally:
+            os.unlink(path)
+            if os.path.exists(path + ".enhanced.md"):
+                os.unlink(path + ".enhanced.md")
+
+    def test_batch_log_json_stays_pure(self):
+        from promptsmith.history import load_history
+        self._tmp_cwd()
+        path = self._write_prompts("help me with python\n"
+                                  "explain recursion with an example\n")
+        try:
+            out = self._run(["batch", path, "--log", "--json"])
+            data = json.loads(out)  # logging must not pollute stdout
+            self.assertEqual(data["summary"]["count"], 2)
+            self.assertEqual(len(load_history()), 2)
+        finally:
+            os.unlink(path)
+
+    def test_batch_log_empty_file_writes_nothing(self):
+        from promptsmith.history import load_history
+        self._tmp_cwd()
+        path = self._write_prompts("\n\n")
+        try:
+            out = self._run(["batch", path, "--log"])
+            self.assertIn("No prompts found", out)
+            self.assertEqual(load_history(), [])
+        finally:
+            os.unlink(path)
+
+    def test_batch_log_missing_file_exits_without_history(self):
+        from promptsmith.history import load_history
+        self._tmp_cwd()
+        with self.assertRaises(SystemExit):
+            with contextlib.redirect_stdout(io.StringIO()):
+                from promptsmith.cli import main
+                main(["batch", "does-not-exist.txt", "--log"])
+        self.assertEqual(load_history(), [])
+
+    def test_skill_mentions_batch_log(self):
+        md = render_skill()
+        self.assertIn("batch --log", md)

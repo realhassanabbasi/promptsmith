@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Deps](https://img.shields.io/badge/dependencies-zero-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-248%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-254%20passing-brightgreen?style=flat-square)
 [![Live demo](https://img.shields.io/badge/demo-live%20in%20browser-black?style=flat-square)](https://realhassanabbasi.github.io/promptsmith/)
 
 **Turn rough prompts into engineered ones.** Paste in *"help me with python"*, get back a structured prompt with a role, context slots, requirements, output format, and guardrails — scored before and after. Works **offline**, with **zero dependencies**.
@@ -22,10 +22,10 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 - **`improve`** — the one-step loop: score, enhance, and re-score a prompt in one command — before/after table with per-check deltas, what improved, `--log`, `--save`, `--json`
 - **`enhance`** — rewrite any rough prompt into a structured, engineered one (+40–55 points on average)
 - **`score`** — grade a prompt 0–100 on 5 checks, with concrete fix-it feedback (`--json` for scripts)
-- **`batch`** — score every prompt in a file (one per line): averages, weakest prompt, optional `--enhance` that writes `FILE.enhanced.md`
+- **`batch`** — score every prompt in a file (one per line): averages, weakest prompt, optional `--enhance` that writes `FILE.enhanced.md`, `--log` that records every run in the score history
 - **`compare`** — put two prompt versions head-to-head: scores, per-check deltas, a winner verdict, and what the loser should fix first (`--json` for scripts)
 - **`diff`** — show exactly what changed, word by word: `diff A.txt B.txt` on its own, or `--diff` on `enhance` and `compare` so a score gain is backed by visible edits (`--json` for scripts)
-- **`history`** — log scored runs (`score`/`compare --log`) and print per-prompt trend reports (`report`): runs, averages, sparklines, and an improving/steady/slipping verdict (`--json` for dashboards)
+- **`history`** — log scored runs (`score`/`compare`/`batch --log`) and print per-prompt trend reports (`report`): runs, averages, sparklines, and an improving/steady/slipping verdict (`--json` for dashboards)
 - **`stats`** — the whole picture in one glance: total runs and prompts tracked, average/best/worst score, per-intent averages, and library totals (names, versions, best prompt) — `report` shows trends per prompt, `stats` shows the project (`--tags a,b` scopes both halves to one tag, `--json` for dashboards)
 - **`library`** — save named prompts as versioned library entries (`save NAME "prompt"`; `--improve` saves the enhanced version too): `library` lists each name's versions/last/best, `library NAME` shows its full version history — your best-scoring prompt is always one glance away (`--tags`, `--json`). Re-saving the exact same prompt text under the same name is refused (it would only double an entry) unless `--force` is given; rollback is exempt, since restoring a version is intentional
 - **`tags`** — list every tag in the library with its counts: how many prompt names carry it, how many versions carry it, and the best score among them — so you filter by a tag that exists instead of guessing one (`--json` for scripts). An empty library gets an honest one-liner, not an empty table
@@ -184,7 +184,20 @@ Weakest: "help me with python" (37/100)
 ```
 
 `--enhance` also rewrites every prompt, reports the average gain, and saves all
-enhanced prompts to `my_prompts.txt.enhanced.md`. `--json` on `score`, `enhance`
+enhanced prompts to `my_prompts.txt.enhanced.md`. `--log` records every scored run in `.promptsmith/history.jsonl` (with `--enhance`, the enhanced rewrite logs as its own run, mirroring `improve --log`), so a bulk run feeds `report` and `stats`:
+
+```
+$ promptsmith batch my_prompts.txt --log
+
+Scored 2 prompts from my_prompts.txt
+
+   1.  37/100 (weak    ) help me with python
+   2.  61/100 (okay    ) explain recursion with an example
+
+Average: 49.0/100
+Weakest: "help me with python" (37/100)
+Logged: 2 run(s) to .promptsmith/history.jsonl
+``` `--json` on `score`, `enhance`
 or `batch` prints machine-readable JSON for scripts and pipelines.
 
 ## Compare mode
@@ -942,7 +955,7 @@ promptsmith/
 │   ├── classifier.py      # Naive Bayes intent classifier, from scratch (+0.35 fallback)
 │   ├── compare.py         # `promptsmith compare` — head-to-head, per-check deltas
 │   ├── enhancer.py        # enhancement pipeline (role → structure → guardrails)
-│   ├── history.py         # `score/compare --log` + `promptsmith report` — score history & trends
+│   ├── history.py         # `score/compare/batch --log` + `promptsmith report` — score history & trends
 │   ├── improve.py         # `promptsmith improve` — score, enhance, re-score in one step
 │   ├── library.py         # `promptsmith save` + `promptsmith library` — versioned prompt library
 │   ├── rollback.py        # `promptsmith rollback` — restore any saved version as a new version
@@ -956,7 +969,7 @@ promptsmith/
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 248 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete, rename, duplicate-guard, library-tags, check-tags, export-tags, stats-tags, tags)
+│   └── test_promptsmith.py  # 254 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete, rename, duplicate-guard, library-tags, check-tags, export-tags, stats-tags, tags, batch-log)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

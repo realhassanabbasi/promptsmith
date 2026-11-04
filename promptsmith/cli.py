@@ -141,6 +141,19 @@ def cmd_batch(args):
         summary["average_gain"] = round(
             sum(e["gain"] for e in results) / len(results), 1)
 
+    if args.log:
+        logged = 0
+        for e in results:
+            intent = e.get("intent") or predict_intent(e["prompt"])[0]
+            log_score(e["prompt"], e["score"], e["grade"],
+                      e["breakdown"], intent=intent)
+            logged += 1
+            if args.enhance:
+                # mirror improve --log: the enhanced rewrite is its own run
+                total, breakdown, _ = score_prompt(e["enhanced"])
+                log_score(e["enhanced"], total, grade(total),
+                          breakdown, intent=intent)
+                logged += 1
     if args.json:
         print(json.dumps({"prompts": results, "summary": summary}, indent=2))
         return
@@ -160,6 +173,9 @@ def cmd_batch(args):
             for i, e in enumerate(results, 1):
                 f.write(f"## {i}. {e['prompt']}\n\n{e['enhanced']}\n\n---\n\n")
         print(f"{bold('Enhanced prompts saved to:')} {out}")
+    if args.log:
+        print(f"{bold('Logged:')} {logged} run(s) to "
+              f".promptsmith/history.jsonl")
     print()
 
 
@@ -840,6 +856,9 @@ def build_parser():
                    help="Print results as machine-readable JSON")
     b.add_argument("--enhance", action="store_true",
                    help="Also enhance each prompt; saves FILE.enhanced.md")
+    b.add_argument("--log", action="store_true",
+                   help="Append every scored run to .promptsmith/history.jsonl"
+                   " (with --enhance, the enhanced rewrite logs as its own run)")
     b.set_defaults(func=cmd_batch)
 
     t = sub.add_parser("templates", help="Browse and fill ready-made prompt templates")

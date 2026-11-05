@@ -307,9 +307,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_28_0(self):
+    def test_version_is_1_29_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.28.0")
+        self.assertEqual(promptsmith.__version__, "1.29.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -2746,3 +2746,34 @@ class TestBatchLog(unittest.TestCase):
     def test_skill_mentions_batch_log(self):
         md = render_skill()
         self.assertIn("batch --log", md)
+
+
+class TestShowcase(unittest.TestCase):
+    """docs/index.html is the public demo page: it must track the real tool —
+    current version, current test count, and every CLI command.
+
+    NOTE: the "256 tests passing" figure is a literal, like the README badge.
+    Bump it (and the showcase metric + README badge) whenever the suite grows.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from promptsmith.cli import build_parser
+        parser = build_parser()
+        actions = parser._subparsers._group_actions
+        cls.commands = sorted(actions[0].choices.keys())
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(repo_root, "docs", "index.html"), encoding="utf-8") as f:
+            cls.page = f.read()
+
+    def test_showcase_shows_current_version_and_test_count(self):
+        import promptsmith
+        self.assertIn(promptsmith.__version__, self.page)
+        # the metric renders as <strong data-count="N">N</strong> + "tests passing"
+        self.assertIn('<strong data-count="256">256</strong>', self.page)
+        self.assertIn("tests passing", self.page)
+
+    def test_showcase_documents_every_command(self):
+        self.assertEqual(len(self.commands), 24)
+        for cmd in self.commands:
+            self.assertIn(cmd, self.page, f"showcase never mentions `{cmd}`")

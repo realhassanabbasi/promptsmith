@@ -3,14 +3,14 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Deps](https://img.shields.io/badge/dependencies-zero-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-254%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-256%20passing-brightgreen?style=flat-square)
 [![Live demo](https://img.shields.io/badge/demo-live%20in%20browser-black?style=flat-square)](https://realhassanabbasi.github.io/promptsmith/)
 
 **Turn rough prompts into engineered ones.** Paste in *"help me with python"*, get back a structured prompt with a role, context slots, requirements, output format, and guardrails — scored before and after. Works **offline**, with **zero dependencies**.
 
 ## Try it in your browser
 
-**[Live interactive demo →](https://realhassanabbasi.github.io/promptsmith/)** — the full engine (score, enhance, compare, intent classifier) running in the page. No install, no server.
+**[Live interactive demo →](https://realhassanabbasi.github.io/promptsmith/)** — the full engine (score, enhance, compare, intent classifier) running in the page, plus the whole 24-command loop documented with a real terminal session. No install, no server.
 
 ## Why
 
@@ -969,7 +969,9 @@ promptsmith/
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 254 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete, rename, duplicate-guard, library-tags, check-tags, export-tags, stats-tags, tags, batch-log)
+│   └── test_promptsmith.py  # 256 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete, rename, duplicate-guard, library-tags, check-tags, export-tags, stats-tags, tags, batch-log, showcase)
+├── docs/
+│   └── index.html         # live interactive showcase (score/enhance/compare in-browser + full 24-command loop)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

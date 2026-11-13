@@ -18,6 +18,7 @@ from .improve import improve_prompt, what_improved
 from .init import init_project
 from .library import (entries_for, filter_by_tags, library_path,
                       load_library, save_entry, summarize, tag_summary)
+from .refresh import refresh_library, refresh_name, refresh_payload
 from .rename import rename_entry
 from .rollback import rollback_entry
 from .search import search_library
@@ -643,6 +644,65 @@ def cmd_check(args):
         sys.exit(1)
 
 
+def cmd_refresh(args):
+    """Re-improve every saved prompt; save better rebuilds as new versions."""
+    records = load_library()
+    if not records:
+        print("Library is empty — run `promptsmith save NAME \"...\"` "
+              "to add your first prompt.")
+        return
+    wanted = [t.strip() for t in (args.tags.split(",") if args.tags else [])
+              if t.strip()]
+    if args.name:
+        result = refresh_name(args.name, records, dry_run=args.dry_run)
+        if result is None:
+            print(f"No saved prompt named \"{args.name}\".")
+            return
+        if wanted and not any(t.lower() in [w.lower() for w in wanted]
+                               for t in result["tags"]):
+            print(f"No versions of \"{args.name}\" carry tag(s): "
+                  f"{', '.join(wanted)}.")
+            return
+        results = [result]
+    else:
+        results = refresh_library(records, tags=wanted,
+                                  dry_run=args.dry_run)
+        if wanted and not results:
+            known = []
+            for r in refresh_library(records, dry_run=True):
+                for t in r["tags"]:
+                    if t not in known:
+                        known.append(t)
+            print(f"No saved prompts carry tag(s): {', '.join(wanted)}.")
+            if known:
+                print(f"Saved tags: {', '.join(known)}.")
+            return
+    if args.json:
+        print(json.dumps(refresh_payload(results), indent=2))
+        return
+    verdict_marks = {"improved": "▲", "unchanged": "▬"}
+    dry = " (dry run — nothing saved)" if args.dry_run else ""
+    print(f"\n{bold('Library refresh')} — {len(results)} refreshed{dry}\n")
+    print(f"  {'name':24} {'ver':>4} {'best':>4} {'now':>4} "
+          f"{'Δ':>4}  verdict")
+    for r in results:
+        mark = verdict_marks[r["verdict"]]
+        delta = f"{r['delta']:+d}{mark}"
+        saved = (f" — saved as v{r['saved_version']}"
+                 if r["saved_version"] else "")
+        print(f"  {r['name'][:24]:24} {r['versions']:>4} "
+              f"{r['before']:>4} {r['after']:>4} {delta:>5}  "
+              f"{r['verdict']}{saved}")
+    print()
+    improved = [r for r in results if r["verdict"] == "improved"]
+    if improved and not args.dry_run:
+        print(f"{bold(f'{len(improved)} improved')} — new versions saved; "
+              f"the library just got better on its own.\n")
+    elif improved:
+        print(f"{bold(f'{len(improved)} would improve')} — re-run without "
+              f"--dry-run to save them as new versions.\n")
+
+
 def cmd_templates(args):
     if args.show:
         print(f"\n{bold(args.show)} — {TEMPLATES[args.show]['about']}")
@@ -973,6 +1033,20 @@ def build_parser():
     ck.add_argument("--json", action="store_true",
                     help="Print as machine-readable JSON")
     ck.set_defaults(func=cmd_check)
+
+    rf = sub.add_parser("refresh", help="Re-improve every saved prompt; "
+                        "save better rebuilds as new versions")
+    rf.add_argument("name", nargs="?", default=None,
+                    help="Refresh only this saved name (omit for the whole "
+                    "library)")
+    rf.add_argument("--tags", metavar="TAGS",
+                    help="Only refresh names carrying one of these tags "
+                    "(comma-separated, any match, case-insensitive)")
+    rf.add_argument("--dry-run", action="store_true",
+                    help="Show what would improve, save nothing")
+    rf.add_argument("--json", action="store_true",
+                    help="Print as machine-readable JSON")
+    rf.set_defaults(func=cmd_refresh)
 
     tk = sub.add_parser("tokens", help="Estimate token count and context usage")
     tk.add_argument("prompt", help="The prompt to measure")

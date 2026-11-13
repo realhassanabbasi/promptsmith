@@ -307,9 +307,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_29_0(self):
+    def test_version_is_1_30_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.29.0")
+        self.assertEqual(promptsmith.__version__, "1.30.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -1139,6 +1139,112 @@ class TestCheck(unittest.TestCase):
         for key in ("name", "versions", "current", "best",
                     "delta", "verdict", "tags"):
             self.assertIn(key, r)
+
+
+class TestRefresh(unittest.TestCase):
+    WEAK = "help me with python"  # scores 37; the enhancer rebuilds it to 92
+
+    def _tmp_cwd(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        prev = os.getcwd()
+        os.chdir(tmp.name)
+        self.addCleanup(os.chdir, prev)
+
+    def _run(self, argv):
+        from promptsmith.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(argv)
+        return buf.getvalue()
+
+    def test_weak_prompt_improves_and_saves_new_version(self):
+        from promptsmith.library import load_library, save_entry
+        from promptsmith.refresh import refresh_name
+        self._tmp_cwd()
+        save_entry("py-help", self.WEAK)
+        r = refresh_name("py-help")
+        self.assertEqual(r["verdict"], "improved")
+        self.assertEqual(r["before"], 37)
+        self.assertEqual(r["after"], 92)
+        self.assertEqual(r["delta"], 55)
+        self.assertEqual(r["saved_version"], 2)
+        self.assertEqual(len(load_library()), 2)
+        self.assertEqual(load_library()[-1]["score"], 92)
+
+    def test_second_refresh_is_unchanged(self):
+        # the enhancer is idempotent on its own output, so refresh converges
+        from promptsmith.library import load_library, save_entry
+        from promptsmith.refresh import refresh_name
+        self._tmp_cwd()
+        save_entry("py-help", self.WEAK)
+        refresh_name("py-help")
+        r = refresh_name("py-help")
+        self.assertEqual(r["verdict"], "unchanged")
+        self.assertEqual(r["delta"], 0)
+        self.assertIsNone(r["saved_version"])
+        self.assertEqual(len(load_library()), 2)
+
+    def test_dry_run_reports_gain_but_saves_nothing(self):
+        from promptsmith.library import load_library, save_entry
+        from promptsmith.refresh import refresh_name
+        self._tmp_cwd()
+        save_entry("py-help", self.WEAK)
+        r = refresh_name("py-help", dry_run=True)
+        self.assertEqual(r["verdict"], "improved")
+        self.assertEqual(r["delta"], 55)
+        self.assertIsNone(r["saved_version"])
+        self.assertEqual(len(load_library()), 1)
+
+    def test_unknown_name_returns_none(self):
+        from promptsmith.refresh import refresh_name
+        self._tmp_cwd()
+        self.assertIsNone(refresh_name("no-such-prompt"))
+
+    def test_empty_library_returns_empty(self):
+        from promptsmith.refresh import refresh_library
+        self._tmp_cwd()
+        self.assertEqual(refresh_library(), [])
+
+    def test_tags_filter_scopes_refresh(self):
+        from promptsmith.library import save_entry
+        from promptsmith.refresh import refresh_library
+        self._tmp_cwd()
+        save_entry("py-help", self.WEAK, tags=["coding"])
+        save_entry("essay-help", "help me write an essay about climate "
+                   "change", tags=["writing"])
+        rows = refresh_library(tags=["coding"])
+        self.assertEqual([r["name"] for r in rows], ["py-help"])
+        self.assertEqual(rows[0]["verdict"], "improved")
+
+    def test_cli_text_shows_improved_row_and_saved_version(self):
+        from promptsmith.library import save_entry
+        self._tmp_cwd()
+        save_entry("py-help", self.WEAK)
+        out = self._run(["refresh"])
+        self.assertIn("Library refresh", out)
+        self.assertIn("py-help", out)
+        self.assertIn("improved", out)
+        self.assertIn("saved as v2", out)
+        self.assertIn("1 improved", out)
+
+    def test_cli_json_schema_and_dry_run(self):
+        from promptsmith.library import save_entry
+        self._tmp_cwd()
+        save_entry("py-help", self.WEAK)
+        data = json.loads(self._run(["refresh", "--json", "--dry-run"]))
+        self.assertEqual(data["refreshed"], 1)
+        self.assertEqual(data["improved"], 1)
+        self.assertEqual(data["unchanged"], 0)
+        r = data["results"][0]
+        for key in ("name", "versions", "before", "after",
+                    "delta", "verdict", "saved_version", "tags"):
+            self.assertIn(key, r)
+        self.assertIsNone(r["saved_version"])
+
+    def test_skill_mentions_refresh(self):
+        from promptsmith.skills import render_skill
+        self.assertIn("refresh", render_skill())
 
 
 class TestCheckTags(unittest.TestCase):
@@ -2752,7 +2858,7 @@ class TestShowcase(unittest.TestCase):
     """docs/index.html is the public demo page: it must track the real tool —
     current version, current test count, and every CLI command.
 
-    NOTE: the "256 tests passing" figure is a literal, like the README badge.
+    NOTE: the "265 tests passing" figure is a literal, like the README badge.
     Bump it (and the showcase metric + README badge) whenever the suite grows.
     """
 
@@ -2770,10 +2876,10 @@ class TestShowcase(unittest.TestCase):
         import promptsmith
         self.assertIn(promptsmith.__version__, self.page)
         # the metric renders as <strong data-count="N">N</strong> + "tests passing"
-        self.assertIn('<strong data-count="256">256</strong>', self.page)
+        self.assertIn('<strong data-count="265">265</strong>', self.page)
         self.assertIn("tests passing", self.page)
 
     def test_showcase_documents_every_command(self):
-        self.assertEqual(len(self.commands), 24)
+        self.assertEqual(len(self.commands), 25)
         for cmd in self.commands:
             self.assertIn(cmd, self.page, f"showcase never mentions `{cmd}`")

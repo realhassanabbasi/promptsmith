@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Deps](https://img.shields.io/badge/dependencies-zero-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-256%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-265%20passing-brightgreen?style=flat-square)
 [![Live demo](https://img.shields.io/badge/demo-live%20in%20browser-black?style=flat-square)](https://realhassanabbasi.github.io/promptsmith/)
 
 **Turn rough prompts into engineered ones.** Paste in *"help me with python"*, get back a structured prompt with a role, context slots, requirements, output format, and guardrails — scored before and after. Works **offline**, with **zero dependencies**.
@@ -30,6 +30,7 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 - **`library`** — save named prompts as versioned library entries (`save NAME "prompt"`; `--improve` saves the enhanced version too): `library` lists each name's versions/last/best, `library NAME` shows its full version history — your best-scoring prompt is always one glance away (`--tags`, `--json`). Re-saving the exact same prompt text under the same name is refused (it would only double an entry) unless `--force` is given; rollback is exempt, since restoring a version is intentional
 - **`tags`** — list every tag in the library with its counts: how many prompt names carry it, how many versions carry it, and the best score among them — so you filter by a tag that exists instead of guessing one (`--json` for scripts). An empty library gets an honest one-liner, not an empty table
 - **`check`** — regression guard for your saved library: re-scores every prompt against its recorded best and flags regressions (rubric upgrades can't silently change what your prompts score); `--fail-on-regression` exits 1 for CI, `--tags a,b` scopes the guard to one tag (so CI can guard just the production prompts), `--json` for dashboards
+- **`refresh`** — upgrade the whole library at once: re-improves every saved prompt and saves the rebuild as a new version ONLY when it beats the recorded best — a zero or negative margin saves nothing, so the library never fills with rewrites that only look better (`--dry-run` previews the gains, `--tags a,b` scopes it to one tag, `--json` for dashboards). A second refresh right after a successful one reports unchanged: the enhancer is idempotent on its own output, so refresh converges instead of stacking versions
 - **`export`** — share your prompt library: `export` prints it as Markdown (one section per prompt, versions with scores and improved text), `--format json` for machine-readable output, `-o FILE` to write to a file, `export NAME` for a single prompt, `--tags a,b` to export only the versions carrying a tag (so a team gets just the coding prompts, not the whole library)
 - **`import`** — bring a shared library back in: `import FILE` reads a `export --format json` file into your library — scores preserved exactly as exported, duplicates skipped (never doubled), existing names continue their version numbers (`--json` for scripts)
 - **`rollback`** — restore any saved version as a new version: `rollback NAME` brings back the previous version, `rollback NAME --to 2` restores version 2 — history is never rewritten, so a rollback is always undoable, and the restored prompt is scored fresh under the current rubric (`--json` for scripts)
@@ -93,6 +94,10 @@ promptsmith tags   # every tag with its counts — discover before you filter
 # guard the library — flag anything that regressed since it was saved
 promptsmith check
 promptsmith check --fail-on-regression   # for CI: exits 1 on any regression
+
+# upgrade the whole library at once — re-improve every saved prompt, keep only the rebuilds that beat the recorded best
+promptsmith refresh
+promptsmith refresh --dry-run   # preview the gains, save nothing
 
 # share the library — Markdown for docs/teams, JSON for scripts
 promptsmith export
@@ -389,6 +394,50 @@ Saved tags: poetry, coding, debug.
 `check NAME --tags ...` shows that name's health only if it carries one of
 the tags, and says so plainly when it doesn't. A name's recorded best still
 counts every version — the filter applies after scoring, never before.
+
+## Refresh the library
+
+`check` tells you a saved prompt regressed; `refresh` fixes it — and fixes
+the whole library in one command. It takes each saved prompt's keeper text
+(the enhanced version when saved with `--improve`, else the prompt), runs
+the improve pipeline on it, and saves the rebuild as a new version ONLY when
+the rebuilt score beats the recorded best. A zero or negative margin saves
+nothing: the same rule the exported skill teaches in step 3 — demand a
+positive margin before shipping.
+
+Real output (the library starts with one weak saved prompt):
+
+```
+$ promptsmith refresh
+
+Library refresh — 1 refreshed
+
+  name                      ver best  now    Δ  verdict
+  py-help                     1   37   92  +55▲  improved — saved as v2
+
+1 improved — new versions saved; the library just got better on its own.
+```
+
+A second refresh right after reports unchanged — the enhancer is idempotent
+on its own output, so refresh converges instead of stacking versions:
+
+```
+$ promptsmith refresh
+
+Library refresh — 1 refreshed
+
+  name                      ver best  now    Δ  verdict
+  py-help                     2   92   92   +0▬  unchanged
+```
+
+- `refresh NAME` — refresh one saved prompt; an unknown name gets an honest
+  one-liner, not an empty table
+- `refresh --dry-run` — show what would improve, save nothing
+- `refresh --tags a,b` — refresh only the names carrying one of those tags
+  (same any-match, case-insensitive rule as `library --tags` and
+  `check --tags`); a miss names the tags that do exist
+- `refresh --json` — machine-readable `{results, refreshed, improved,
+  unchanged}` for dashboards
 
 ## Score history
 
@@ -901,7 +950,7 @@ More pairs in [`examples/before_after.md`](examples/before_after.md).
                                                   stats / improve / save / library /
                                                   rollback / search / tokens / cost /
                                                   check / export / import / init /
-                                                  delete / rename
+                                                  delete / rename / refresh
             +--------------------+--------------------+
             |                    |                    |
      +------v------+      +------v------+      +------v------+
@@ -944,8 +993,9 @@ promptsmith/
 ├── promptsmith/
 │   ├── __init__.py        # public API
 │   ├── __main__.py        # `python -m promptsmith`
-│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/diff/report/stats/improve/save/library/rollback/search/tokens/cost/check/export/init/import/delete/rename)
+│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/diff/report/stats/improve/save/library/rollback/search/tokens/cost/check/export/init/import/delete/rename/refresh)
 │   ├── check.py           # `promptsmith check` — re-score the library, flag regressions
+│   ├── refresh.py         # `promptsmith refresh` — re-improve every saved prompt, save better rebuilds as new versions
 │   ├── cost.py            # `promptsmith cost` — offline API cost estimates (11-model price snapshot)
 │   ├── diff.py            # `promptsmith diff` + `--diff` — word-level change diffs, stdlib difflib
 │   ├── export.py          # `promptsmith export` — library to Markdown/JSON
@@ -969,9 +1019,9 @@ promptsmith/
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 256 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete, rename, duplicate-guard, library-tags, check-tags, export-tags, stats-tags, tags, batch-log, showcase)
+│   └── test_promptsmith.py  # 265 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete, rename, duplicate-guard, library-tags, check-tags, export-tags, stats-tags, tags, batch-log, showcase, refresh)
 ├── docs/
-│   └── index.html         # live interactive showcase (score/enhance/compare in-browser + full 24-command loop)
+│   └── index.html         # live interactive showcase (score/enhance/compare in-browser + full 25-command loop)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

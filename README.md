@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Deps](https://img.shields.io/badge/dependencies-zero-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-265%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-276%20passing-brightgreen?style=flat-square)
 [![Live demo](https://img.shields.io/badge/demo-live%20in%20browser-black?style=flat-square)](https://realhassanabbasi.github.io/promptsmith/)
 
 **Turn rough prompts into engineered ones.** Paste in *"help me with python"*, get back a structured prompt with a role, context slots, requirements, output format, and guardrails — scored before and after. Works **offline**, with **zero dependencies**.
@@ -31,6 +31,7 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 - **`tags`** — list every tag in the library with its counts: how many prompt names carry it, how many versions carry it, and the best score among them — so you filter by a tag that exists instead of guessing one (`--json` for scripts). An empty library gets an honest one-liner, not an empty table
 - **`check`** — regression guard for your saved library: re-scores every prompt against its recorded best and flags regressions (rubric upgrades can't silently change what your prompts score); `--fail-on-regression` exits 1 for CI, `--tags a,b` scopes the guard to one tag (so CI can guard just the production prompts), `--json` for dashboards
 - **`refresh`** — upgrade the whole library at once: re-improves every saved prompt and saves the rebuild as a new version ONLY when it beats the recorded best — a zero or negative margin saves nothing, so the library never fills with rewrites that only look better (`--dry-run` previews the gains, `--tags a,b` scopes it to one tag, `--json` for dashboards). A second refresh right after a successful one reports unchanged: the enhancer is idempotent on its own output, so refresh converges instead of stacking versions
+- **`prune`** — keep the library lean: `prune` keeps only the best N versions of every saved name (`--keep 2` by default, `--keep 1` keeps just the best) and drops score-history records older than 30 days (`--history-days` to change it) — ties go to the latest version, the versions left behind keep their numbers, and a history record with a missing or unparseable timestamp is never deleted (`--dry-run` previews what goes, `--library-only`/`--history-only` scope it, `--json` for scripts). Refresh grows the library; prune is the half that trims it back
 - **`export`** — share your prompt library: `export` prints it as Markdown (one section per prompt, versions with scores and improved text), `--format json` for machine-readable output, `-o FILE` to write to a file, `export NAME` for a single prompt, `--tags a,b` to export only the versions carrying a tag (so a team gets just the coding prompts, not the whole library)
 - **`import`** — bring a shared library back in: `import FILE` reads a `export --format json` file into your library — scores preserved exactly as exported, duplicates skipped (never doubled), existing names continue their version numbers (`--json` for scripts)
 - **`rollback`** — restore any saved version as a new version: `rollback NAME` brings back the previous version, `rollback NAME --to 2` restores version 2 — history is never rewritten, so a rollback is always undoable, and the restored prompt is scored fresh under the current rubric (`--json` for scripts)
@@ -98,6 +99,10 @@ promptsmith check --fail-on-regression   # for CI: exits 1 on any regression
 # upgrade the whole library at once — re-improve every saved prompt, keep only the rebuilds that beat the recorded best
 promptsmith refresh
 promptsmith refresh --dry-run   # preview the gains, save nothing
+
+# keep the library lean — best versions only, old history out
+promptsmith prune
+promptsmith prune --dry-run   # preview what goes, delete nothing
 
 # share the library — Markdown for docs/teams, JSON for scripts
 promptsmith export
@@ -849,6 +854,56 @@ exists (renaming onto it would merge two histories into one, and merged
 histories lie about which versions belong to which prompt). Score
 history is untouched — it is keyed by prompt text, not by library name.
 
+## Prune the library
+
+Real output — `refresh` grows the library, and nothing ever trimmed it
+back. Prune keeps the best versions and drops the rest; the versions
+left behind keep their numbers:
+
+```
+$ promptsmith save py-help "help me with python" --tags coding,debug
+Saved: py-help v1 — 37/100 (weak)
+$ promptsmith save py-help "help me with python 3 and pip" --tags coding,debug
+Saved: py-help v2 — 45/100 (weak)
+$ promptsmith save py-help "help me write an essay about climate change" --improve --tags writing
+Saved: py-help v3 — 92/100 (excellent)
+Improved version saved too: 37/100 → 92/100.
+$ promptsmith prune --dry-run
+Library prune — 1 name(s), 1 version(s) dropped (dry run — nothing deleted)
+
+  name                             kept      dropped
+  py-help                        v2, v3           v1
+
+History: dropped 0 record(s) older than 30 day(s), 1 kept (dry run — nothing deleted).
+$ promptsmith prune
+Library prune — 1 name(s), 1 version(s) dropped
+
+  name                             kept      dropped
+  py-help                        v2, v3           v1
+
+History: dropped 0 record(s) older than 30 day(s), 1 kept.
+$ promptsmith library py-help
+py-help — 2 version(s)
+
+  ver score grade     saved
+  v2   45/100 (weak    ) 2026-11-15
+       "help me with python 3 and pip"
+  v3   92/100 (excellent) 2026-11-15
+       "help me write an essay about climate change"
+       → improved: "You are a professional writer with a clear, natural voice.
+
+Task…"
+```
+
+`--keep N` sets how many best versions survive per name (default 2,
+`--keep 1` keeps just the best); `--history-days N` sets the history
+cutoff (default 30). A tie on score goes to the latest version — the
+fresher text at the same score wins. A history record with a missing or
+unparseable timestamp is never deleted: prune drops only what it can
+date. `--library-only` and `--history-only` scope the run to one half;
+`--dry-run` shows the table and deletes nothing. Bad flags are refused
+with an honest message and exit 1.
+
 ## Agent skill export
 
 Coding agents (Claude Code, Codex, Cursor) can use PromptSmith's rubric
@@ -950,7 +1005,7 @@ More pairs in [`examples/before_after.md`](examples/before_after.md).
                                                   stats / improve / save / library /
                                                   rollback / search / tokens / cost /
                                                   check / export / import / init /
-                                                  delete / rename / refresh
+                                                  delete / rename / refresh / prune
             +--------------------+--------------------+
             |                    |                    |
      +------v------+      +------v------+      +------v------+
@@ -993,9 +1048,10 @@ promptsmith/
 ├── promptsmith/
 │   ├── __init__.py        # public API
 │   ├── __main__.py        # `python -m promptsmith`
-│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/diff/report/stats/improve/save/library/rollback/search/tokens/cost/check/export/init/import/delete/rename/refresh)
+│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/diff/report/stats/improve/save/library/rollback/search/tokens/cost/check/export/init/import/delete/rename/refresh/prune)
 │   ├── check.py           # `promptsmith check` — re-score the library, flag regressions
 │   ├── refresh.py         # `promptsmith refresh` — re-improve every saved prompt, save better rebuilds as new versions
+│   ├── prune.py           # `promptsmith prune` — keep the best N versions per name, drop old history (undatable records never deleted)
 │   ├── cost.py            # `promptsmith cost` — offline API cost estimates (11-model price snapshot)
 │   ├── diff.py            # `promptsmith diff` + `--diff` — word-level change diffs, stdlib difflib
 │   ├── export.py          # `promptsmith export` — library to Markdown/JSON
@@ -1019,9 +1075,9 @@ promptsmith/
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 265 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete, rename, duplicate-guard, library-tags, check-tags, export-tags, stats-tags, tags, batch-log, showcase, refresh)
+│   └── test_promptsmith.py  # 276 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete, rename, duplicate-guard, library-tags, check-tags, export-tags, stats-tags, tags, batch-log, showcase, refresh, prune)
 ├── docs/
-│   └── index.html         # live interactive showcase (score/enhance/compare in-browser + full 25-command loop)
+│   └── index.html         # live interactive showcase (score/enhance/compare in-browser + full 26-command loop)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

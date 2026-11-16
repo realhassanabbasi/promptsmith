@@ -18,6 +18,8 @@ from .improve import improve_prompt, what_improved
 from .init import init_project
 from .library import (entries_for, filter_by_tags, library_path,
                       load_library, save_entry, summarize, tag_summary)
+from .prune import (DEFAULT_HISTORY_DAYS, DEFAULT_KEEP, prune_history,
+                    prune_library, prune_payload)
 from .refresh import refresh_library, refresh_name, refresh_payload
 from .rename import rename_entry
 from .rollback import rollback_entry
@@ -588,6 +590,63 @@ def cmd_rename(args):
           f"{result['renamed']} version(s) ({vers}) moved.\n")
 
 
+def cmd_prune(args):
+    """Keep the best versions per name; drop old history records."""
+    try:
+        do_library = not args.history_only
+        do_history = not args.library_only
+        if args.library_only and args.history_only:
+            do_library = do_history = True
+        library_rows = []
+        history_result = None
+        if do_library:
+            library_rows = prune_library(keep=args.keep,
+                                         dry_run=args.dry_run)
+        if do_history:
+            history_result = prune_history(days=args.history_days,
+                                           dry_run=args.dry_run)
+    except ValueError as e:
+        print(f"Prune refused: {e}")
+        sys.exit(1)
+    if args.json:
+        print(json.dumps(prune_payload(library_rows, history_result),
+                         indent=2))
+        return
+    if do_library and not library_rows and do_history and \
+            history_result is not None and \
+            history_result["dropped"] == 0 and history_result["kept"] == 0:
+        print("Nothing to prune — the library and the history are "
+              "both empty.")
+        return
+    if do_library:
+        if not library_rows:
+            print("Library is empty — run `promptsmith save NAME \"...\"` "
+                  "to add your first prompt.")
+        else:
+            dry = " (dry run — nothing deleted)" if args.dry_run else ""
+            dropped = sum(r["dropped"] for r in library_rows)
+            print(f"\n{bold('Library prune')} — {len(library_rows)} "
+                  f"name(s), {dropped} version(s) dropped{dry}\n")
+            print(f"  {'name':24} {'kept':>12} {'dropped':>12}")
+            for r in library_rows:
+                kept = ", ".join(f"v{v}" for v in r["kept_versions"])
+                dropped_vs = (", ".join(f"v{v}"
+                                        for v in r["dropped_versions"])
+                              or "—")
+                print(f"  {r['name'][:24]:24} {kept:>12} "
+                      f"{dropped_vs:>12}")
+            print()
+    if do_history:
+        if history_result["dropped"] == 0 and history_result["kept"] == 0:
+            print("No score history yet — run `promptsmith score \"...\" "
+                  "--log` to start tracking.\n")
+        else:
+            dry = " (dry run — nothing deleted)" if args.dry_run else ""
+            print(f"History: dropped {history_result['dropped']} "
+                  f"record(s) older than {args.history_days} day(s), "
+                  f"{history_result['kept']} kept{dry}.\n")
+
+
 def cmd_check(args):
     """Re-score the saved library against its own history; flag regressions."""
     records = load_library()
@@ -1106,6 +1165,25 @@ def build_parser():
     rn.add_argument("--json", action="store_true",
                     help="Print the rename report as machine-readable JSON")
     rn.set_defaults(func=cmd_rename)
+
+    pr = sub.add_parser("prune", help="Keep the best versions per name; "
+                        "drop old score history")
+    pr.add_argument("--keep", type=int, default=DEFAULT_KEEP, metavar="N",
+                    help="Keep this many best versions per name "
+                         "(default: 2)")
+    pr.add_argument("--history-days", type=int, default=DEFAULT_HISTORY_DAYS,
+                    metavar="DAYS",
+                    help="Drop history records older than this many days "
+                         "(default: 30)")
+    pr.add_argument("--library-only", action="store_true",
+                    help="Prune the library only — leave the history alone")
+    pr.add_argument("--history-only", action="store_true",
+                    help="Prune the history only — leave the library alone")
+    pr.add_argument("--dry-run", action="store_true",
+                    help="Show what would be dropped, delete nothing")
+    pr.add_argument("--json", action="store_true",
+                    help="Print the prune report as machine-readable JSON")
+    pr.set_defaults(func=cmd_prune)
 
     ni = sub.add_parser("init", help="Start a PromptSmith project folder with demo prompts")
     ni.add_argument("dir", nargs="?", default=".",

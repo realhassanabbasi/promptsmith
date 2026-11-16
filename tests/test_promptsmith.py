@@ -307,9 +307,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_30_0(self):
+    def test_version_is_1_31_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.30.0")
+        self.assertEqual(promptsmith.__version__, "1.31.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -2464,6 +2464,179 @@ class TestRename(unittest.TestCase):
         self.assertIn("`rename`", md)
 
 
+class TestPrune(unittest.TestCase):
+    def _tmp_cwd(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        prev = os.getcwd()
+        os.chdir(tmp.name)
+        self.addCleanup(os.chdir, prev)
+
+    def _run(self, argv):
+        from promptsmith.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(argv)
+        return buf.getvalue()
+
+    def _record(self, name, version, score, prompt="p",
+                ts="2026-11-15T12:00:00+00:00"):
+        return {"name": name, "version": version, "score": score,
+                "prompt": prompt, "enhanced": None, "before_score": None,
+                "intent": None, "confidence": None, "breakdown": {},
+                "grade": "weak", "tags": [], "ts": ts}
+
+    def _write_library(self, records):
+        os.makedirs(".promptsmith", exist_ok=True)
+        with open(".promptsmith/library.jsonl", "w",
+                  encoding="utf-8") as f:
+            for r in records:
+                f.write(json.dumps(r) + "\n")
+
+    def _write_history(self, records):
+        os.makedirs(".promptsmith", exist_ok=True)
+        with open(".promptsmith/history.jsonl", "w",
+                  encoding="utf-8") as f:
+            for r in records:
+                f.write(json.dumps(r) + "\n")
+
+    def _seed_library(self):
+        self._write_library([
+            self._record("py-help", 1, 37, "help me with python"),
+            self._record("py-help", 2, 45,
+                         "help me with python 3 and pip"),
+            self._record("py-help", 3, 92, "engineered essay prompt"),
+            self._record("email-writer", 1, 37, "write a polite email"),
+            self._record("email-writer", 2, 45,
+                         "write a polite email, 3 paragraphs, formal"),
+        ])
+
+    def test_keeps_best_two_by_score(self):
+        from promptsmith.library import load_library
+        from promptsmith.prune import prune_library
+        self._tmp_cwd()
+        self._seed_library()
+        rows = prune_library()
+        by_name = {r["name"]: r for r in rows}
+        self.assertEqual(by_name["py-help"]["kept_versions"], [2, 3])
+        self.assertEqual(by_name["py-help"]["dropped_versions"], [1])
+        self.assertEqual(by_name["email-writer"]["dropped_versions"], [])
+        self.assertEqual(len(load_library()), 4)
+
+    def test_tie_prefers_latest_version(self):
+        from promptsmith.library import entries_for
+        from promptsmith.prune import prune_library
+        self._tmp_cwd()
+        self._write_library([
+            self._record("py-help", 1, 45, "first 45"),
+            self._record("py-help", 2, 45, "second 45"),
+        ])
+        rows = prune_library(keep=1)
+        self.assertEqual(rows[0]["kept_versions"], [2])
+        self.assertEqual(rows[0]["dropped_versions"], [1])
+        self.assertEqual(entries_for("py-help")[0]["prompt"], "second 45")
+
+    def test_version_numbers_kept(self):
+        from promptsmith.library import entries_for
+        from promptsmith.prune import prune_library
+        self._tmp_cwd()
+        self._seed_library()
+        prune_library()
+        versions = [r["version"] for r in entries_for("py-help")]
+        self.assertEqual(versions, [2, 3])
+
+    def test_dry_run_changes_nothing(self):
+        from promptsmith.prune import prune_library
+        self._tmp_cwd()
+        self._seed_library()
+        before = open(".promptsmith/library.jsonl", "rb").read()
+        rows = prune_library(dry_run=True)
+        after = open(".promptsmith/library.jsonl", "rb").read()
+        self.assertEqual(before, after)
+        py_help = [r for r in rows if r["name"] == "py-help"][0]
+        self.assertEqual(py_help["dropped"], 1)
+
+    def test_history_cutoff(self):
+        from datetime import datetime, timedelta, timezone
+        from promptsmith.history import load_history
+        from promptsmith.prune import prune_history
+        self._tmp_cwd()
+        now = datetime.now(timezone.utc)
+        old = (now - timedelta(days=40)).isoformat(timespec="seconds")
+        recent = (now - timedelta(days=2)).isoformat(timespec="seconds")
+        self._write_history([
+            {"ts": old, "prompt": "old", "score": 40, "grade": "weak",
+             "breakdown": {}, "intent": None},
+            {"ts": recent, "prompt": "recent", "score": 50,
+             "grade": "weak", "breakdown": {}, "intent": None},
+            {"ts": "not-a-date", "prompt": "undatable", "score": 30,
+             "grade": "weak", "breakdown": {}, "intent": None},
+        ])
+        result = prune_history(days=30)
+        self.assertEqual(result, {"dropped": 1, "kept": 2})
+        kept = [r["prompt"] for r in load_history()]
+        self.assertEqual(kept, ["recent", "undatable"])
+
+    def test_keep_more_than_versions_drops_nothing(self):
+        from promptsmith.prune import prune_library
+        self._tmp_cwd()
+        self._seed_library()
+        rows = prune_library(keep=5)
+        self.assertTrue(all(r["dropped"] == 0 for r in rows))
+
+    def test_invalid_keep_and_days_raise(self):
+        from promptsmith.prune import prune_history, prune_library
+        self._tmp_cwd()
+        self._seed_library()
+        with self.assertRaises(ValueError):
+            prune_library(keep=0)
+        with self.assertRaises(ValueError):
+            prune_history(days=-1)
+
+    def test_cli_text_and_json(self):
+        from promptsmith.library import save_entry
+        self._tmp_cwd()
+        save_entry("py-help", "help me with python", tags=["coding"])
+        save_entry("py-help", "help me with python 3 and pip",
+                   tags=["coding"])
+        save_entry("py-help", "help me write an essay about climate "
+                   "change", enhance_it=True, tags=["writing"])
+        out = self._run(["prune", "--keep", "1", "--library-only"])
+        self.assertIn("Library prune", out)
+        self.assertIn("py-help", out)
+        self.assertIn("v3", out)
+        self.assertIn("v1, v2", out)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            from promptsmith.cli import main
+            main(["prune", "--library-only", "--json"])
+        data = json.loads(buf.getvalue())
+        self.assertEqual(data["library"][0]["name"], "py-help")
+        self.assertEqual(data["library"][0]["kept_versions"], [3])
+        self.assertEqual(data["dropped_total"], 0)
+
+    def test_cli_dry_run_and_empty(self):
+        from promptsmith.library import load_library, save_entry
+        self._tmp_cwd()
+        out = self._run(["prune"])
+        self.assertIn("Nothing to prune", out)
+        save_entry("py-help", "help me with python")
+        save_entry("py-help", "help me with python 3 and pip")
+        out = self._run(["prune", "--dry-run", "--library-only"])
+        self.assertIn("dry run", out)
+        self.assertEqual(len(load_library()), 2)
+
+    def test_cli_invalid_keep_exits_1(self):
+        self._tmp_cwd()
+        with self.assertRaises(SystemExit) as cm:
+            self._run(["prune", "--keep", "0"])
+        self.assertEqual(cm.exception.code, 1)
+
+    def test_skill_mentions_prune(self):
+        md = render_skill()
+        self.assertIn("`prune`", md)
+
+
 class TestDuplicateGuard(unittest.TestCase):
     WEAK = "help me with python"
 
@@ -2858,7 +3031,7 @@ class TestShowcase(unittest.TestCase):
     """docs/index.html is the public demo page: it must track the real tool —
     current version, current test count, and every CLI command.
 
-    NOTE: the "265 tests passing" figure is a literal, like the README badge.
+    NOTE: the "276 tests passing" figure is a literal, like the README badge.
     Bump it (and the showcase metric + README badge) whenever the suite grows.
     """
 
@@ -2876,10 +3049,10 @@ class TestShowcase(unittest.TestCase):
         import promptsmith
         self.assertIn(promptsmith.__version__, self.page)
         # the metric renders as <strong data-count="N">N</strong> + "tests passing"
-        self.assertIn('<strong data-count="265">265</strong>', self.page)
+        self.assertIn('<strong data-count="276">276</strong>', self.page)
         self.assertIn("tests passing", self.page)
 
     def test_showcase_documents_every_command(self):
-        self.assertEqual(len(self.commands), 25)
+        self.assertEqual(len(self.commands), 26)
         for cmd in self.commands:
             self.assertIn(cmd, self.page, f"showcase never mentions `{cmd}`")

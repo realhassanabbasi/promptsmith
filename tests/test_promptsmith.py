@@ -307,9 +307,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_31_0(self):
+    def test_version_is_1_32_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.31.0")
+        self.assertEqual(promptsmith.__version__, "1.32.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -3027,11 +3027,176 @@ class TestBatchLog(unittest.TestCase):
         self.assertIn("batch --log", md)
 
 
+class TestAudit(unittest.TestCase):
+    WEAK = "help me with python"  # scores 37 on the current rubric
+    ESSAY = "help me write an essay about climate change"
+
+    def _tmp_cwd(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        prev = os.getcwd()
+        os.chdir(tmp.name)
+        self.addCleanup(os.chdir, prev)
+
+    def _run(self, argv):
+        from promptsmith.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(argv)
+        return buf.getvalue()
+
+    def _write_records(self, records):
+        os.makedirs(".promptsmith", exist_ok=True)
+        with open(".promptsmith/library.jsonl", "w", encoding="utf-8") as f:
+            for r in records:
+                r.setdefault("tags", [])
+                f.write(json.dumps(r) + "\n")
+
+    def _record(self, name, score, prompt=None, enhanced=None, tags=None):
+        return {"name": name, "version": 1, "score": score,
+                "prompt": prompt or self.WEAK, "enhanced": enhanced,
+                "tags": tags or []}
+
+    def test_duplicates_across_names(self):
+        from promptsmith.audit import find_duplicates
+        records = [self._record("py-help", 37),
+                   self._record("py-help-2", 37)]
+        rows = find_duplicates(records)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["names"], ["py-help", "py-help-2"])
+        self.assertEqual(rows[0]["versions"], 2)
+
+    def test_duplicate_whitespace_and_case_variants(self):
+        from promptsmith.audit import find_duplicates
+        records = [self._record("a", 37, prompt="Help me  with python"),
+                   self._record("b", 37, prompt="help me with python")]
+        self.assertEqual(len(find_duplicates(records)), 1)
+
+    def test_same_name_same_text_is_not_a_duplicate(self):
+        from promptsmith.audit import find_duplicates
+        records = [self._record("py-help", 37),
+                   {**self._record("py-help", 37), "version": 2}]
+        self.assertEqual(find_duplicates(records), [])
+
+    def test_duplicate_uses_keeper_text(self):
+        from promptsmith.audit import find_duplicates
+        improved = ("You are a professional writer with a clear, "
+                    "natural voice.\n\nTask: help me with python")
+        records = [self._record("a", 92, enhanced=improved),
+                   self._record("b", 45, prompt=improved)]
+        rows = find_duplicates(records)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(sorted(rows[0]["names"]), ["a", "b"])
+
+    def test_weak_default_threshold_is_50(self):
+        from promptsmith.audit import weak_names
+        records = [self._record("weak-one", 45),
+                   self._record("okay-one", 55),
+                   self._record("good-one", 80)]
+        self.assertEqual([r["name"] for r in weak_names(records)],
+                         ["weak-one"])
+        self.assertEqual([r["name"] for r in weak_names(records,
+                                                        threshold=70)],
+                         ["weak-one", "okay-one"])
+
+    def test_untagged_names(self):
+        from promptsmith.audit import untagged_names
+        records = [self._record("tagged", 92, tags=["coding"]),
+                   self._record("bare", 45)]
+        self.assertEqual([r["name"] for r in untagged_names(records)],
+                         ["bare"])
+
+    def test_never_improved_names(self):
+        from promptsmith.audit import never_improved_names
+        records = [self._record("improved-one", 92, enhanced="improved"),
+                   self._record("raw-one", 45)]
+        self.assertEqual(
+            [r["name"] for r in never_improved_names(records)],
+            ["raw-one"])
+
+    def test_clean_library_verdict(self):
+        from promptsmith.audit import audit_library
+        improved = ("You are a professional writer with a clear, "
+                    "natural voice.\n\nTask: help me with python")
+        records = [self._record("py-help", 92, enhanced=improved,
+                                tags=["coding"])]
+        result = audit_library(records)
+        self.assertEqual(result["verdict"], "clean")
+        self.assertEqual(result["issues"], 0)
+        self.assertEqual(result["names"], 1)
+        self.assertEqual(result["versions"], 1)
+
+    def test_empty_library_audit(self):
+        from promptsmith.audit import audit_library
+        result = audit_library([])
+        self.assertEqual(result["names"], 0)
+        self.assertEqual(result["issues"], 0)
+        self.assertEqual(result["verdict"], "clean")
+
+    def test_cli_text_shows_findings(self):
+        self._tmp_cwd()
+        from promptsmith.library import save_entry
+        save_entry("py-help", self.WEAK)
+        save_entry("py-help-copy", self.WEAK)
+        out = self._run(["audit"])
+        self.assertIn("Duplicates", out)
+        self.assertIn("py-help", out)
+        self.assertIn("Weak keepers", out)
+        self.assertIn("Untagged", out)
+        self.assertIn("Never improved", out)
+
+    def test_cli_json_schema(self):
+        self._tmp_cwd()
+        from promptsmith.library import save_entry
+        save_entry("py-help", self.WEAK)
+        out = self._run(["audit", "--json"])
+        data = json.loads(out)
+        self.assertEqual(data["names"], 1)
+        self.assertEqual(data["versions"], 1)
+        self.assertEqual(data["verdict"], "needs attention")
+        self.assertEqual(data["counts"]["weak"], 1)
+        self.assertEqual(data["counts"]["duplicates"], 0)
+        self.assertEqual(data["counts"]["untagged"], 1)
+        self.assertEqual(data["counts"]["never_improved"], 1)
+
+    def test_cli_fail_exits_1_with_issues_0_when_clean(self):
+        self._tmp_cwd()
+        from promptsmith.library import save_entry
+        save_entry("py-help", self.WEAK)
+        with self.assertRaises(SystemExit) as cm:
+            self._run(["audit", "--fail"])
+        self.assertEqual(cm.exception.code, 1)
+        # A clean library needs every name's best above the bar, tagged
+        # and improved — seed one from scratch in a fresh folder.
+        self._tmp_cwd()
+        save_entry("essay-help", self.ESSAY, enhance_it=True,
+                   tags=["writing"])
+        out = self._run(["audit", "--fail"])
+        self.assertIn("healthy", out)
+
+    def test_cli_empty_is_honest(self):
+        self._tmp_cwd()
+        out = self._run(["audit"])
+        self.assertIn("Library is empty", out)
+
+    def test_skill_mentions_audit(self):
+        from promptsmith.skills import render_skill
+        self.assertIn("audit", render_skill())
+
+    def test_audit_exported(self):
+        import promptsmith
+        for name in ("audit_library", "audit_payload", "find_duplicates",
+                     "weak_names", "untagged_names",
+                     "never_improved_names", "normalize_text"):
+            self.assertIn(name, promptsmith.__all__)
+            self.assertTrue(callable(getattr(promptsmith, name)))
+
+
 class TestShowcase(unittest.TestCase):
     """docs/index.html is the public demo page: it must track the real tool —
     current version, current test count, and every CLI command.
 
-    NOTE: the "276 tests passing" figure is a literal, like the README badge.
+    NOTE: the "291 tests passing" figure is a literal, like the README badge.
     Bump it (and the showcase metric + README badge) whenever the suite grows.
     """
 
@@ -3049,10 +3214,10 @@ class TestShowcase(unittest.TestCase):
         import promptsmith
         self.assertIn(promptsmith.__version__, self.page)
         # the metric renders as <strong data-count="N">N</strong> + "tests passing"
-        self.assertIn('<strong data-count="276">276</strong>', self.page)
+        self.assertIn('<strong data-count="291">291</strong>', self.page)
         self.assertIn("tests passing", self.page)
 
     def test_showcase_documents_every_command(self):
-        self.assertEqual(len(self.commands), 26)
+        self.assertEqual(len(self.commands), 27)
         for cmd in self.commands:
             self.assertIn(cmd, self.page, f"showcase never mentions `{cmd}`")

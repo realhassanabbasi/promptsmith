@@ -5,6 +5,7 @@ import json
 import sys
 
 from . import __version__, enhance
+from .audit import DEFAULT_WEAK, audit_library, audit_payload
 from .check import check_library, check_name, check_payload
 from .classifier import predict_intent
 from .compare import compare_prompts
@@ -703,6 +704,54 @@ def cmd_check(args):
         sys.exit(1)
 
 
+def cmd_audit(args):
+    """Find duplicates, weak keepers, untagged and never-improved prompts."""
+    records = load_library()
+    if not records:
+        print("Library is empty — run `promptsmith save NAME \"...\"` "
+              "to add your first prompt.")
+        return
+    result = audit_library(records, weak_threshold=args.weak)
+    if args.json:
+        print(json.dumps(audit_payload(result), indent=2))
+    else:
+        print(f"\n{bold('Library audit')} — {result['names']} name(s), "
+              f"{result['versions']} version(s), "
+              f"{result['issues']} issue(s)\n")
+        if result["duplicates"]:
+            print("  Duplicates — same prompt saved under two names:")
+            for d in result["duplicates"]:
+                names = ", ".join(d["names"])
+                print(f"    {names} ({d['versions']} versions)")
+                print(f"      \"{d['preview'][:70]}"
+                      f"{'...' if len(d['preview']) > 70 else ''}\"")
+                print("      Fix: keep one name — "
+                      f"`promptsmith delete {' / '.join(d['names'][1:])}`")
+            print()
+        if result["weak"]:
+            print(f"  Weak keepers — best version below {args.weak}/100:")
+            for w in result["weak"]:
+                print(f"    {w['name'][:24]:24} best {w['best']:>3}/100 "
+                      f"({w['versions']} version(s))")
+            print("      Fix: `promptsmith improve \"...\"`, then "
+                  "`save` the rebuild.\n")
+        if result["untagged"]:
+            print("  Untagged — no tag on any version:")
+            for u in result["untagged"]:
+                print(f"    {u['name'][:24]:24} ({u['versions']} version(s))")
+            print("      Fix: re-save the keeper with `--tags a,b`.\n")
+        if result["never_improved"]:
+            print("  Never improved — no version saved via --improve:")
+            for n in result["never_improved"]:
+                print(f"    {n['name'][:24]:24} ({n['versions']} version(s))")
+            print("      Fix: `promptsmith save NAME \"...\" --improve`.\n")
+        if result["issues"] == 0:
+            print("  Library looks healthy — no duplicates, no weak "
+                  "keepers, every name tagged and improved.\n")
+    if args.fail and result["issues"] > 0:
+        sys.exit(1)
+
+
 def cmd_refresh(args):
     """Re-improve every saved prompt; save better rebuilds as new versions."""
     records = load_library()
@@ -1092,6 +1141,17 @@ def build_parser():
     ck.add_argument("--json", action="store_true",
                     help="Print as machine-readable JSON")
     ck.set_defaults(func=cmd_check)
+
+    au = sub.add_parser("audit", help="Find duplicates, weak keepers, "
+                        "untagged and never-improved prompts in the library")
+    au.add_argument("--weak", type=int, default=DEFAULT_WEAK, metavar="N",
+                    help="Best-version score below this is a weak keeper "
+                    f"(default: {DEFAULT_WEAK}, the rubric's weak/okay line)")
+    au.add_argument("--fail", action="store_true",
+                    help="Exit 1 if anything is found (useful in CI)")
+    au.add_argument("--json", action="store_true",
+                    help="Print as machine-readable JSON")
+    au.set_defaults(func=cmd_audit)
 
     rf = sub.add_parser("refresh", help="Re-improve every saved prompt; "
                         "save better rebuilds as new versions")

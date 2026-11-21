@@ -3,6 +3,9 @@
 Zero dependencies, works offline. Built by Hassan Abbasi.
 """
 
+from .audit import (audit_library, audit_payload, find_duplicates,
+                    never_improved_names, normalize_text, untagged_names,
+                    weak_names)
 from .check import check_library, check_name, check_payload
 from .classifier import load_default, predict_intent
 from .compare import compare_prompts
@@ -28,10 +31,12 @@ from .skills import render_skill, write_skill
 from .templates import names, placeholders, render, TEMPLATES
 from .tokens import context_share, estimate_tokens, token_report
 
-__version__ = "1.31.0"
+__version__ = "1.32.0"
 __all__ = ["load_default", "predict_intent", "check_library", "check_name", "check_payload", "enhance", "improve_prompt", "what_improved", "score_prompt", "grade", "compare_prompts", "cost_estimate", "cost_report", "known_models", "word_diff", "diff_stats", "render_diff", "diff_payload", "export_json", "export_markdown", "export_payload", "render", "names", "placeholders", "TEMPLATES", "render_skill", "write_skill", "log_score", "load_history", "trend", "sparkline", "verdict", "save_entry", "load_library", "entries_for", "summarize", "filter_by_tags",
     "init_project", "estimate_tokens", "token_report", "context_share",
-    "tag_summary",
+    "tag_summary", "audit_library", "audit_payload", "find_duplicates",
+    "weak_names", "untagged_names", "never_improved_names",
+    "normalize_text",
     "import_file", "import_payload", "stats_payload", "rollback_entry",
     "search_library", "delete_entry", "rename_entry", "refresh_library",
     "refresh_name", "refresh_payload", "prune_library", "prune_history",

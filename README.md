@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Deps](https://img.shields.io/badge/dependencies-zero-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-276%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-291%20passing-brightgreen?style=flat-square)
 [![Live demo](https://img.shields.io/badge/demo-live%20in%20browser-black?style=flat-square)](https://realhassanabbasi.github.io/promptsmith/)
 
 **Turn rough prompts into engineered ones.** Paste in *"help me with python"*, get back a structured prompt with a role, context slots, requirements, output format, and guardrails — scored before and after. Works **offline**, with **zero dependencies**.
@@ -30,6 +30,7 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 - **`library`** — save named prompts as versioned library entries (`save NAME "prompt"`; `--improve` saves the enhanced version too): `library` lists each name's versions/last/best, `library NAME` shows its full version history — your best-scoring prompt is always one glance away (`--tags`, `--json`). Re-saving the exact same prompt text under the same name is refused (it would only double an entry) unless `--force` is given; rollback is exempt, since restoring a version is intentional
 - **`tags`** — list every tag in the library with its counts: how many prompt names carry it, how many versions carry it, and the best score among them — so you filter by a tag that exists instead of guessing one (`--json` for scripts). An empty library gets an honest one-liner, not an empty table
 - **`check`** — regression guard for your saved library: re-scores every prompt against its recorded best and flags regressions (rubric upgrades can't silently change what your prompts score); `--fail-on-regression` exits 1 for CI, `--tags a,b` scopes the guard to one tag (so CI can guard just the production prompts), `--json` for dashboards
+- **`audit`** — library health check for the mess `check` never sees: the same prompt saved under two names, keepers whose best version is still weak (below `--weak`, default 50 — the rubric's weak/okay line), names with no tags, and prompts never run through `--improve` — each finding comes with its fix (`--fail` exits 1 for CI, `--json` for dashboards). An empty library gets an honest one-liner, a clean library gets a clean bill of health
 - **`refresh`** — upgrade the whole library at once: re-improves every saved prompt and saves the rebuild as a new version ONLY when it beats the recorded best — a zero or negative margin saves nothing, so the library never fills with rewrites that only look better (`--dry-run` previews the gains, `--tags a,b` scopes it to one tag, `--json` for dashboards). A second refresh right after a successful one reports unchanged: the enhancer is idempotent on its own output, so refresh converges instead of stacking versions
 - **`prune`** — keep the library lean: `prune` keeps only the best N versions of every saved name (`--keep 2` by default, `--keep 1` keeps just the best) and drops score-history records older than 30 days (`--history-days` to change it) — ties go to the latest version, the versions left behind keep their numbers, and a history record with a missing or unparseable timestamp is never deleted (`--dry-run` previews what goes, `--library-only`/`--history-only` scope it, `--json` for scripts). Refresh grows the library; prune is the half that trims it back
 - **`export`** — share your prompt library: `export` prints it as Markdown (one section per prompt, versions with scores and improved text), `--format json` for machine-readable output, `-o FILE` to write to a file, `export NAME` for a single prompt, `--tags a,b` to export only the versions carrying a tag (so a team gets just the coding prompts, not the whole library)
@@ -904,6 +905,54 @@ date. `--library-only` and `--history-only` scope the run to one half;
 `--dry-run` shows the table and deletes nothing. Bad flags are refused
 with an honest message and exit 1.
 
+## Audit the library
+
+Real output — `check` guards regressions, but four kinds of mess never
+regress a score: the same prompt saved under two names, a keeper whose
+best version is still weak, a name with no tags, and a prompt never run
+through `--improve`. Audit finds all four and prints the fix for each:
+
+```
+$ promptsmith save py-help "help me with python" --tags coding,debug
+Saved: py-help v1 — 37/100 (weak)
+$ promptsmith save py-help-copy "help me with python"
+Saved: py-help-copy v1 — 37/100 (weak)
+$ promptsmith save essay-help "help me write an essay about climate change" --improve --tags writing
+Saved: essay-help v1 — 92/100 (excellent)
+Improved version saved too: 37/100 → 92/100.
+$ promptsmith audit
+
+Library audit — 3 name(s), 3 version(s), 6 issue(s)
+
+  Duplicates — same prompt saved under two names:
+    py-help, py-help-copy (2 versions)
+      "help me with python"
+      Fix: keep one name — `promptsmith delete py-help-copy`
+
+  Weak keepers — best version below 50/100:
+    py-help                  best  37/100 (1 version(s))
+    py-help-copy             best  37/100 (1 version(s))
+      Fix: `promptsmith improve "..."`, then `save` the rebuild.
+
+  Untagged — no tag on any version:
+    py-help-copy             (1 version(s))
+      Fix: re-save the keeper with `--tags a,b`.
+
+  Never improved — no version saved via --improve:
+    py-help                  (1 version(s))
+    py-help-copy             (1 version(s))
+      Fix: `promptsmith save NAME "..." --improve`.
+```
+
+Duplicate detection compares the keeper text (the improved version when
+one was saved with `--improve`, otherwise the prompt itself), ignoring
+case and extra whitespace — the same prompt written two ways still
+counts as one. `--weak N` moves the bar for weak keepers (default 50,
+the rubric's weak/okay line); `--fail` exits 1 when anything is found,
+so CI can block a messy library the same way `check --fail-on-regression`
+blocks a regressed one. A clean library prints "Library looks healthy"
+and exits 0.
+
 ## Agent skill export
 
 Coding agents (Claude Code, Codex, Cursor) can use PromptSmith's rubric
@@ -1048,7 +1097,8 @@ promptsmith/
 ├── promptsmith/
 │   ├── __init__.py        # public API
 │   ├── __main__.py        # `python -m promptsmith`
-│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/diff/report/stats/improve/save/library/rollback/search/tokens/cost/check/export/init/import/delete/rename/refresh/prune)
+│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/diff/report/stats/improve/save/library/rollback/search/tokens/cost/check/audit/export/init/import/delete/rename/refresh/prune)
+│   ├── audit.py           # `promptsmith audit` — duplicates, weak keepers, untagged and never-improved prompts
 │   ├── check.py           # `promptsmith check` — re-score the library, flag regressions
 │   ├── refresh.py         # `promptsmith refresh` — re-improve every saved prompt, save better rebuilds as new versions
 │   ├── prune.py           # `promptsmith prune` — keep the best N versions per name, drop old history (undatable records never deleted)
@@ -1075,9 +1125,9 @@ promptsmith/
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 276 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete, rename, duplicate-guard, library-tags, check-tags, export-tags, stats-tags, tags, batch-log, showcase, refresh, prune)
+│   └── test_promptsmith.py  # 291 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete, rename, duplicate-guard, library-tags, check-tags, export-tags, stats-tags, tags, batch-log, showcase, refresh, prune, audit)
 ├── docs/
-│   └── index.html         # live interactive showcase (score/enhance/compare in-browser + full 26-command loop)
+│   └── index.html         # live interactive showcase (score/enhance/compare in-browser + full 27-command loop)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

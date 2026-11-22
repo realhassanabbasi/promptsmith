@@ -12,6 +12,7 @@ from .compare import compare_prompts
 from .cost import MODEL_PRICES, cost_report
 from .delete import delete_entry
 from .diff import diff_payload, diff_stats, render_diff
+from .doctor import doctor_fix, doctor_payload, doctor_report
 from .export import export_json, export_markdown
 from .importing import import_file
 from .history import load_history, log_score, trend, verdict
@@ -752,6 +753,56 @@ def cmd_audit(args):
         sys.exit(1)
 
 
+def cmd_doctor(args):
+    """Check the .promptsmith data folder for damage; repair with --fix."""
+    report = doctor_report()
+    if not report["folder_exists"]:
+        print("No .promptsmith folder yet — run "
+              "`promptsmith score \"...\" --log` or "
+              "`promptsmith save NAME \"...\"` to create one.")
+        return
+    if args.fix:
+        fixed = doctor_fix()
+        for f in fixed["fixed"]:
+            print(f"Fixed {f['file']} — dropped {f['dropped']} bad "
+                  f"line(s), kept {f['kept']}, backup at "
+                  f".promptsmith/{f['backup']}")
+        if fixed["fixed"]:
+            print()
+        report = doctor_report()
+    if args.json:
+        print(json.dumps(doctor_payload(report), indent=2))
+    else:
+        print(f"\n{bold('Folder check')} — .promptsmith\n")
+        print(f"  {'file':14} {'lines':>5} {'valid':>5} "
+              f"{'corrupt':>7} {'incomplete':>10}")
+        for row in report["files"]:
+            if not row["exists"]:
+                print(f"  {row['file']:14} (missing — created on first use)")
+                continue
+            print(f"  {row['file']:14} {row['lines']:>5} "
+                  f"{row['valid']:>5} {row['corrupt']:>7} "
+                  f"{row['incomplete']:>10}")
+            for n in row["corrupt_lines"]:
+                print(f"    line {n}: not valid JSON")
+            for n in row["incomplete_lines"]:
+                print(f"    line {n}: record is missing a required field")
+        if report["stray"]:
+            print("\n  Stray files — not part of the data folder:")
+            for name in report["stray"]:
+                print(f"    {name}")
+            print("    Fix: move or delete them yourself — doctor never "
+                  "deletes files.\n")
+        if report["issues"] == 0:
+            print("\n  Folder looks healthy — every line is a complete "
+                  "record.\n")
+        else:
+            print(f"\n  {report['issues']} issue(s) — re-run with --fix to "
+                  "drop the bad lines (a .bak backup is written first).\n")
+    if args.fail and report["issues"] > 0:
+        sys.exit(1)
+
+
 def cmd_refresh(args):
     """Re-improve every saved prompt; save better rebuilds as new versions."""
     records = load_library()
@@ -1152,6 +1203,18 @@ def build_parser():
     au.add_argument("--json", action="store_true",
                     help="Print as machine-readable JSON")
     au.set_defaults(func=cmd_audit)
+
+    dr = sub.add_parser("doctor", help="Check the .promptsmith data folder "
+                        "for damaged lines; --fix repairs it")
+    dr.add_argument("--fix", action="store_true",
+                    help="Drop corrupt and incomplete lines (a .bak backup "
+                         "is written first)")
+    dr.add_argument("--fail", action="store_true",
+                    help="Exit 1 if anything is still wrong after any "
+                         "repair (useful in CI)")
+    dr.add_argument("--json", action="store_true",
+                    help="Print as machine-readable JSON")
+    dr.set_defaults(func=cmd_doctor)
 
     rf = sub.add_parser("refresh", help="Re-improve every saved prompt; "
                         "save better rebuilds as new versions")

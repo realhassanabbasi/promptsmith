@@ -307,9 +307,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_32_0(self):
+    def test_version_is_1_33_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.32.0")
+        self.assertEqual(promptsmith.__version__, "1.33.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -3192,11 +3192,215 @@ class TestAudit(unittest.TestCase):
             self.assertTrue(callable(getattr(promptsmith, name)))
 
 
+class TestDoctor(unittest.TestCase):
+    WEAK = "help me with python"  # scores 37 on the current rubric
+
+    def _tmp_cwd(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        prev = os.getcwd()
+        os.chdir(tmp.name)
+        self.addCleanup(os.chdir, prev)
+
+    def _run(self, argv):
+        from promptsmith.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(argv)
+        return buf.getvalue()
+
+    def _write(self, filename, text):
+        os.makedirs(".promptsmith", exist_ok=True)
+        with open(f".promptsmith/{filename}", "w", encoding="utf-8") as f:
+            f.write(text)
+
+    def _good_history(self):
+        return json.dumps({"ts": "2026-11-21T00:00:00+00:00",
+                           "prompt": self.WEAK, "score": 37,
+                           "grade": "weak", "breakdown": {},
+                           "intent": "learn"}) + "\n"
+
+    def _good_library(self):
+        return json.dumps({"name": "py-help", "version": 1, "score": 37,
+                           "prompt": self.WEAK, "enhanced": None,
+                           "tags": []}) + "\n"
+
+    def test_corrupt_lines_counted(self):
+        self._tmp_cwd()
+        self._write("history.jsonl",
+                    self._good_history() + '{"prompt": "half-writ\n')
+        from promptsmith.doctor import scan_file
+        row = scan_file("history.jsonl")
+        self.assertEqual(row["lines"], 2)
+        self.assertEqual(row["valid"], 1)
+        self.assertEqual(row["corrupt"], 1)
+        self.assertEqual(row["corrupt_lines"], [2])
+
+    def test_blank_lines_are_not_corrupt(self):
+        self._tmp_cwd()
+        self._write("history.jsonl",
+                    self._good_history() + "\n   \n" + self._good_history())
+        from promptsmith.doctor import scan_file
+        row = scan_file("history.jsonl")
+        self.assertEqual(row["blank"], 2)
+        self.assertEqual(row["valid"], 2)
+        self.assertEqual(row["corrupt"], 0)
+        self.assertEqual(row["incomplete"], 0)
+
+    def test_incomplete_records_counted(self):
+        self._tmp_cwd()
+        missing_score = json.dumps({"prompt": self.WEAK}) + "\n"
+        not_a_record = json.dumps(["just", "a", "list"]) + "\n"
+        self._write("library.jsonl",
+                    self._good_library() + missing_score + not_a_record)
+        from promptsmith.doctor import scan_file
+        row = scan_file("library.jsonl")
+        self.assertEqual(row["valid"], 1)
+        self.assertEqual(row["incomplete"], 2)
+        self.assertEqual(row["incomplete_lines"], [2, 3])
+
+    def test_missing_file_row(self):
+        self._tmp_cwd()
+        os.makedirs(".promptsmith", exist_ok=True)
+        from promptsmith.doctor import scan_file
+        row = scan_file("library.jsonl")
+        self.assertFalse(row["exists"])
+        self.assertEqual(row["lines"], 0)
+
+    def test_missing_folder_verdict_empty(self):
+        self._tmp_cwd()
+        from promptsmith.doctor import doctor_report
+        result = doctor_report()
+        self.assertFalse(result["folder_exists"])
+        self.assertEqual(result["verdict"], "empty")
+        self.assertEqual(result["issues"], 0)
+
+    def test_healthy_folder_verdict(self):
+        self._tmp_cwd()
+        self._write("history.jsonl", self._good_history())
+        self._write("library.jsonl", self._good_library())
+        from promptsmith.doctor import doctor_report
+        result = doctor_report()
+        self.assertEqual(result["verdict"], "healthy")
+        self.assertEqual(result["issues"], 0)
+
+    def test_stray_files_reported(self):
+        self._tmp_cwd()
+        self._write("history.jsonl", self._good_history())
+        self._write("notes.txt", "a random file\n")
+        from promptsmith.doctor import doctor_report
+        result = doctor_report()
+        self.assertEqual(result["stray"], ["notes.txt"])
+        self.assertEqual(result["verdict"], "needs attention")
+        self.assertEqual(result["issues"], 1)
+
+    def test_fix_drops_bad_lines_keeps_valid(self):
+        self._tmp_cwd()
+        self._write("library.jsonl",
+                    self._good_library()
+                    + '{"name": "broken", "prompt": "x"\n'
+                    + json.dumps({"prompt": self.WEAK}) + "\n"
+                    + self._good_library())
+        from promptsmith.doctor import doctor_fix, doctor_report
+        from promptsmith.library import load_library
+        fixed = doctor_fix()
+        self.assertEqual(fixed["issues_fixed"], 2)
+        self.assertEqual(fixed["verdict"], "healthy")
+        self.assertEqual(len(load_library()), 2)
+        self.assertEqual(doctor_report()["verdict"], "healthy")
+
+    def test_fix_writes_bak_with_original(self):
+        self._tmp_cwd()
+        damaged = self._good_history() + '{"prompt": "half-writ\n'
+        self._write("history.jsonl", damaged)
+        from promptsmith.doctor import doctor_fix
+        doctor_fix()
+        with open(".promptsmith/history.jsonl.bak", encoding="utf-8") as f:
+            self.assertEqual(f.read(), damaged)
+        with open(".promptsmith/history.jsonl", encoding="utf-8") as f:
+            self.assertEqual(f.read(), self._good_history())
+
+    def test_fix_leaves_healthy_file_alone(self):
+        self._tmp_cwd()
+        self._write("history.jsonl", self._good_history())
+        self._write("library.jsonl", self._good_library())
+        from promptsmith.doctor import doctor_fix
+        fixed = doctor_fix()
+        self.assertEqual(fixed["fixed"], [])
+        self.assertFalse(os.path.exists(".promptsmith/history.jsonl.bak"))
+        self.assertFalse(os.path.exists(".promptsmith/library.jsonl.bak"))
+
+    def test_fix_missing_folder_is_noop(self):
+        self._tmp_cwd()
+        from promptsmith.doctor import doctor_fix
+        fixed = doctor_fix()
+        self.assertEqual(fixed["fixed"], [])
+        self.assertEqual(fixed["verdict"], "empty")
+
+    def test_cli_text_shows_findings(self):
+        self._tmp_cwd()
+        self._write("history.jsonl",
+                    self._good_history() + '{"prompt": "half-writ\n')
+        out = self._run(["doctor"])
+        self.assertIn("history.jsonl", out)
+        self.assertIn("line 2: not valid JSON", out)
+        self.assertIn("1 issue(s)", out)
+
+    def test_cli_fix_repairs(self):
+        self._tmp_cwd()
+        self._write("history.jsonl",
+                    self._good_history() + '{"prompt": "half-writ\n')
+        out = self._run(["doctor", "--fix"])
+        self.assertIn("Fixed history.jsonl", out)
+        self.assertIn("backup", out)
+        self.assertIn("Folder looks healthy", out)
+
+    def test_cli_json_schema(self):
+        self._tmp_cwd()
+        self._write("history.jsonl",
+                    self._good_history() + '{"prompt": "half-writ\n')
+        self._write("notes.txt", "stray\n")
+        out = self._run(["doctor", "--json"])
+        data = json.loads(out)
+        self.assertEqual(data["verdict"], "needs attention")
+        self.assertEqual(data["counts"]["corrupt"], 1)
+        self.assertEqual(data["counts"]["incomplete"], 0)
+        self.assertEqual(data["counts"]["stray"], 1)
+        self.assertEqual(data["stray"], ["notes.txt"])
+
+    def test_cli_fail_exits_1_with_issues_0_when_healthy(self):
+        self._tmp_cwd()
+        self._write("history.jsonl",
+                    self._good_history() + '{"prompt": "half-writ\n')
+        with self.assertRaises(SystemExit) as cm:
+            self._run(["doctor", "--fail"])
+        self.assertEqual(cm.exception.code, 1)
+        # After --fix the same folder is clean, so --fail exits 0.
+        self._run(["doctor", "--fix"])
+        out = self._run(["doctor", "--fail"])
+        self.assertIn("healthy", out)
+
+    def test_cli_empty_folder_is_honest(self):
+        self._tmp_cwd()
+        out = self._run(["doctor"])
+        self.assertIn("No .promptsmith folder yet", out)
+
+    def test_skill_mentions_doctor(self):
+        from promptsmith.skills import render_skill
+        self.assertIn("doctor", render_skill())
+
+    def test_doctor_exported(self):
+        import promptsmith
+        for name in ("doctor_report", "doctor_fix", "doctor_payload"):
+            self.assertIn(name, promptsmith.__all__)
+            self.assertTrue(callable(getattr(promptsmith, name)))
+
+
 class TestShowcase(unittest.TestCase):
     """docs/index.html is the public demo page: it must track the real tool —
     current version, current test count, and every CLI command.
 
-    NOTE: the "291 tests passing" figure is a literal, like the README badge.
+    NOTE: the "309 tests passing" figure is a literal, like the README badge.
     Bump it (and the showcase metric + README badge) whenever the suite grows.
     """
 
@@ -3214,10 +3418,10 @@ class TestShowcase(unittest.TestCase):
         import promptsmith
         self.assertIn(promptsmith.__version__, self.page)
         # the metric renders as <strong data-count="N">N</strong> + "tests passing"
-        self.assertIn('<strong data-count="291">291</strong>', self.page)
+        self.assertIn('<strong data-count="309">309</strong>', self.page)
         self.assertIn("tests passing", self.page)
 
     def test_showcase_documents_every_command(self):
-        self.assertEqual(len(self.commands), 27)
+        self.assertEqual(len(self.commands), 28)
         for cmd in self.commands:
             self.assertIn(cmd, self.page, f"showcase never mentions `{cmd}`")

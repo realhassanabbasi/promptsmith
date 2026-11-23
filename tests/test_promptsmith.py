@@ -307,9 +307,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_33_0(self):
+    def test_version_is_1_34_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.33.0")
+        self.assertEqual(promptsmith.__version__, "1.34.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -3396,11 +3396,306 @@ class TestDoctor(unittest.TestCase):
             self.assertTrue(callable(getattr(promptsmith, name)))
 
 
+class TestSkillEnhance(unittest.TestCase):
+    WEAK_SKILL = (
+        "# My Helper\n\n"
+        "Be helpful and do your best.\n\n"
+        "Use your judgment as needed.\n\n"
+        "See `missing-guide.md` for details.\n"
+    )
+
+    GOOD_SKILL = (
+        "---\n"
+        "name: py-helper\n"
+        "description: Score Python prompts 0-100 and rebuild the weak "
+        "ones with concrete roles, formats and guardrails.\n"
+        "---\n\n"
+        "# Py Helper\n\n"
+        "## Instructions\n\n"
+        "1. Read the prompt and score it with the 5 checks.\n"
+        "2. Write down every check below full marks.\n"
+        "3. Rebuild the prompt: role, task, context, format, guardrail.\n"
+        "4. Re-score the rebuild and report the margin.\n\n"
+        "## Example\n\n"
+        "Input: \"help me with python\"\n\n"
+        "Output: score 37/100 (weak) — too short, no format, no "
+        "guardrail. Rebuilt to 92/100 with the code role.\n\n"
+        "## Workflow\n\n"
+        "1. Score the draft.\n"
+        "2. If the score is below 70, rebuild it; otherwise ship it.\n"
+        "3. If you get stuck, say what is missing and ask.\n\n"
+        "## Constraints\n\n"
+        "- Never invent facts the prompt does not give you.\n"
+        "- Do not rewrite what already scores full marks.\n"
+        "- Don't guess when unsure — say so.\n"
+    )
+
+    def _tmp_cwd(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        prev = os.getcwd()
+        os.chdir(tmp.name)
+        self.addCleanup(os.chdir, prev)
+
+    def _run(self, argv):
+        from promptsmith.cli import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(argv)
+        return buf.getvalue()
+
+    def _write_skill(self, name, text):
+        with open(name, "w", encoding="utf-8") as f:
+            f.write(text)
+
+    def test_parse_frontmatter_present(self):
+        from promptsmith.skill_enhance import parse_skill
+        parsed = parse_skill(self.GOOD_SKILL)
+        self.assertTrue(parsed["frontmatter"]["present"])
+        self.assertEqual(parsed["frontmatter"]["name"], "py-helper")
+        self.assertIn("Score Python prompts", parsed["frontmatter"]["description"])
+
+    def test_parse_no_frontmatter(self):
+        from promptsmith.skill_enhance import parse_skill
+        parsed = parse_skill(self.WEAK_SKILL)
+        self.assertFalse(parsed["frontmatter"]["present"])
+        self.assertIsNone(parsed["frontmatter"]["name"])
+
+    def test_frontmatter_missing_scores_zero(self):
+        from promptsmith.skill_enhance import score_skill
+        _, parts, findings = score_skill(self.WEAK_SKILL)
+        self.assertEqual(parts["frontmatter"], 0)
+        self.assertTrue(any("No frontmatter" in f for f in findings))
+
+    def test_frontmatter_good_scores_full(self):
+        from promptsmith.skill_enhance import score_skill
+        _, parts, _ = score_skill(self.GOOD_SKILL)
+        self.assertEqual(parts["frontmatter"], 100)
+
+    def test_instructions_vague_penalty(self):
+        from promptsmith.skill_enhance import score_skill
+        _, parts, _ = score_skill(self.WEAK_SKILL)
+        self.assertLess(parts["instructions"], 50)
+
+    def test_instructions_numbered_steps_score_high(self):
+        from promptsmith.skill_enhance import score_skill
+        _, parts, _ = score_skill(self.GOOD_SKILL)
+        self.assertEqual(parts["instructions"], 100)
+
+    def test_examples_missing_scores_zero(self):
+        from promptsmith.skill_enhance import score_skill
+        _, parts, findings = score_skill(self.WEAK_SKILL)
+        self.assertEqual(parts["examples"], 0)
+        self.assertTrue(any("No example" in f for f in findings))
+
+    def test_examples_with_io_pair_scores_full(self):
+        from promptsmith.skill_enhance import score_skill
+        _, parts, _ = score_skill(self.GOOD_SKILL)
+        self.assertEqual(parts["examples"], 100)
+
+    def test_workflow_all_three_present(self):
+        from promptsmith.skill_enhance import score_skill
+        _, parts, _ = score_skill(self.GOOD_SKILL)
+        self.assertEqual(parts["workflow"], 100)
+
+    def test_workflow_missing_scores_zero(self):
+        from promptsmith.skill_enhance import score_skill
+        _, parts, _ = score_skill(self.WEAK_SKILL)
+        self.assertEqual(parts["workflow"], 0)
+
+    def test_references_existing_file_scores_100(self):
+        self._tmp_cwd()
+        self._write_skill("guide.md", "# Guide\n")
+        from promptsmith.skill_enhance import score_skill
+        skill = self.GOOD_SKILL + "\nSee `guide.md` for the full rubric.\n"
+        _, parts, _ = score_skill(skill)
+        self.assertEqual(parts["references"], 100)
+
+    def test_references_missing_file_flagged(self):
+        from promptsmith.skill_enhance import score_skill
+        _, parts, findings = score_skill(self.WEAK_SKILL)
+        self.assertLess(parts["references"], 100)
+        self.assertTrue(any("missing-guide.md" in f for f in findings))
+
+    def test_references_none_scores_100(self):
+        from promptsmith.skill_enhance import score_skill
+        _, parts, _ = score_skill(self.GOOD_SKILL)
+        self.assertEqual(parts["references"], 100)
+
+    def test_constraints_none_scores_low(self):
+        from promptsmith.skill_enhance import score_skill
+        _, parts, _ = score_skill(self.WEAK_SKILL)
+        self.assertEqual(parts["constraints"], 10)
+
+    def test_constraints_three_markers_scores_100(self):
+        from promptsmith.skill_enhance import score_skill
+        _, parts, _ = score_skill(self.GOOD_SKILL)
+        self.assertEqual(parts["constraints"], 100)
+
+    def test_weak_skill_overall_is_weak(self):
+        from promptsmith.skill_enhance import score_skill
+        overall, _, _ = score_skill(self.WEAK_SKILL)
+        self.assertLess(overall, 50)
+
+    def test_good_skill_overall_is_excellent(self):
+        from promptsmith.skill_enhance import score_skill
+        overall, _, _ = score_skill(self.GOOD_SKILL)
+        self.assertGreaterEqual(overall, 85)
+
+    def test_enhance_improves_weak_skill(self):
+        from promptsmith.skill_enhance import enhance_skill
+        result = enhance_skill(self.WEAK_SKILL)
+        self.assertGreaterEqual(result["after"], 70)
+        self.assertGreater(result["gain"], 30)
+        self.assertTrue(result["changes"])
+        # the rewrite never invents content: placeholders are marked
+        self.assertIn("TODO", result["enhanced"])
+
+    def test_enhance_keeps_safe_vague_lines_listed(self):
+        from promptsmith.skill_enhance import enhance_skill
+        result = enhance_skill(self.WEAK_SKILL)
+        texts = [t for _, t in result["still_vague"]]
+        self.assertTrue(any("judgment" in t for t in texts))
+
+    def test_enhance_writes_enhanced_file_leaves_original(self):
+        self._tmp_cwd()
+        self._write_skill("SKILL.md", self.WEAK_SKILL)
+        from promptsmith.skill_enhance import enhance_skill_file
+        result = enhance_skill_file("SKILL.md")
+        self.assertEqual(result["written"], "SKILL.enhanced.md")
+        self.assertIsNone(result["backup"])
+        with open("SKILL.md", encoding="utf-8") as f:
+            self.assertEqual(f.read(), self.WEAK_SKILL)
+        with open("SKILL.enhanced.md", encoding="utf-8") as f:
+            self.assertEqual(f.read(), result["enhanced"])
+
+    def test_enhance_in_place_writes_bak(self):
+        self._tmp_cwd()
+        self._write_skill("SKILL.md", self.WEAK_SKILL)
+        from promptsmith.skill_enhance import enhance_skill_file
+        result = enhance_skill_file("SKILL.md", in_place=True)
+        self.assertEqual(result["written"], "SKILL.md")
+        self.assertEqual(result["backup"], "SKILL.md.bak")
+        with open("SKILL.md.bak", encoding="utf-8") as f:
+            self.assertEqual(f.read(), self.WEAK_SKILL)
+
+    def test_enhance_dry_run_writes_nothing(self):
+        self._tmp_cwd()
+        self._write_skill("SKILL.md", self.WEAK_SKILL)
+        from promptsmith.skill_enhance import enhance_skill_file
+        result = enhance_skill_file("SKILL.md", dry_run=True)
+        self.assertIsNone(result["written"])
+        self.assertFalse(os.path.exists("SKILL.enhanced.md"))
+
+    def test_cli_text_shows_scores_and_changes(self):
+        self._tmp_cwd()
+        self._write_skill("SKILL.md", self.WEAK_SKILL)
+        out = self._run(["skill-enhance", "SKILL.md"])
+        self.assertIn("Skill score:", out)
+        self.assertIn("frontmatter", out)
+        self.assertIn("What changed:", out)
+        self.assertIn("SKILL.enhanced.md", out)
+
+    def test_cli_dry_run_writes_nothing(self):
+        self._tmp_cwd()
+        self._write_skill("SKILL.md", self.WEAK_SKILL)
+        out = self._run(["skill-enhance", "SKILL.md", "--dry-run"])
+        self.assertIn("Dry run", out)
+        self.assertFalse(os.path.exists("SKILL.enhanced.md"))
+
+    def test_cli_json_schema(self):
+        self._tmp_cwd()
+        self._write_skill("SKILL.md", self.WEAK_SKILL)
+        out = self._run(["skill-enhance", "SKILL.md", "--json"])
+        data = json.loads(out)
+        self.assertLess(data["before"], 50)
+        self.assertGreater(data["after"], data["before"])
+        self.assertEqual(data["written"], "SKILL.enhanced.md")
+        self.assertIn("frontmatter", data["parts_before"])
+        self.assertIn("enhanced", data)
+
+    def test_cli_fail_exits_1_when_weak_0_when_good(self):
+        self._tmp_cwd()
+        self._write_skill("weak.md", self.WEAK_SKILL)
+        with self.assertRaises(SystemExit) as cm:
+            self._run(["skill-enhance", "weak.md", "--fail"])
+        self.assertEqual(cm.exception.code, 1)
+        self._write_skill("good.md", self.GOOD_SKILL)
+        out = self._run(["skill-enhance", "good.md", "--fail"])
+        self.assertIn("Skill score:", out)
+
+    def test_cli_missing_file_exits_1(self):
+        self._tmp_cwd()
+        with self.assertRaises(SystemExit) as cm:
+            self._run(["skill-enhance", "nope.md"])
+        self.assertEqual(cm.exception.code, 1)
+
+    def test_cli_default_skill_md(self):
+        self._tmp_cwd()
+        self._write_skill("SKILL.md", self.WEAK_SKILL)
+        out = self._run(["skill-enhance"])
+        self.assertIn("Skill score:", out)
+        self.assertTrue(os.path.exists("SKILL.enhanced.md"))
+
+    def test_cli_no_skill_md_is_honest(self):
+        self._tmp_cwd()
+        with self.assertRaises(SystemExit) as cm:
+            self._run(["skill-enhance"])
+        self.assertEqual(cm.exception.code, 1)
+
+    def test_enhance_keeps_single_workflow_heading(self):
+        from promptsmith.skill_enhance import enhance_skill
+        # a skill whose Workflow section has steps but no decision point
+        # and no stuck rule (whole-body scoring: 40/100, so it triggers)
+        skill = (
+            "---\n"
+            "name: demo-skill\n"
+            "description: Score Python prompts 0-100 and rebuild the "
+            "weak ones with concrete roles, formats and guardrails.\n"
+            "---\n\n"
+            "# Demo\n\n"
+            "## Instructions\n\n"
+            "1. Read the prompt and score it.\n"
+            "2. Rebuild the weak parts.\n\n"
+            "## Example\n\n"
+            "Input: \"help me with python\"\n\n"
+            "Output: score 37/100 (weak).\n\n"
+            "## Workflow\n\n"
+            "1. Score the draft.\n"
+            "2. Ship it.\n\n"
+            "## Constraints\n\n"
+            "- Never invent facts.\n"
+        )
+        result = enhance_skill(skill)
+        self.assertEqual(result["enhanced"].count("## Workflow"), 1)
+        self.assertEqual(result["enhanced"].count("## Constraints"), 1)
+        self.assertGreater(result["after"], result["before"])
+
+    def test_enhance_keeps_single_constraints_heading(self):
+        from promptsmith.skill_enhance import enhance_skill
+        skill = self.GOOD_SKILL.replace(
+            "- Do not rewrite what already scores full marks.\n"
+            "- Don't guess when unsure — say so.\n", "")
+        result = enhance_skill(skill)
+        self.assertEqual(result["enhanced"].count("## Constraints"), 1)
+        self.assertGreater(result["after"], result["before"])
+
+    def test_skill_mentions_skill_enhance(self):
+        from promptsmith.skills import render_skill
+        self.assertIn("skill-enhance", render_skill())
+
+    def test_skill_enhance_exported(self):
+        import promptsmith
+        for name in ("score_skill", "enhance_skill", "skill_enhance_payload"):
+            self.assertIn(name, promptsmith.__all__)
+            self.assertTrue(callable(getattr(promptsmith, name)))
+
+
 class TestShowcase(unittest.TestCase):
     """docs/index.html is the public demo page: it must track the real tool —
     current version, current test count, and every CLI command.
 
-    NOTE: the "309 tests passing" figure is a literal, like the README badge.
+    NOTE: the "342 tests passing" figure is a literal, like the README badge.
     Bump it (and the showcase metric + README badge) whenever the suite grows.
     """
 
@@ -3418,10 +3713,10 @@ class TestShowcase(unittest.TestCase):
         import promptsmith
         self.assertIn(promptsmith.__version__, self.page)
         # the metric renders as <strong data-count="N">N</strong> + "tests passing"
-        self.assertIn('<strong data-count="309">309</strong>', self.page)
+        self.assertIn('<strong data-count="342">342</strong>', self.page)
         self.assertIn("tests passing", self.page)
 
     def test_showcase_documents_every_command(self):
-        self.assertEqual(len(self.commands), 28)
+        self.assertEqual(len(self.commands), 29)
         for cmd in self.commands:
             self.assertIn(cmd, self.page, f"showcase never mentions `{cmd}`")

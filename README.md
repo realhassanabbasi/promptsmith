@@ -3,14 +3,14 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Deps](https://img.shields.io/badge/dependencies-zero-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-309%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-342%20passing-brightgreen?style=flat-square)
 [![Live demo](https://img.shields.io/badge/demo-live%20in%20browser-black?style=flat-square)](https://realhassanabbasi.github.io/promptsmith/)
 
 **Turn rough prompts into engineered ones.** Paste in *"help me with python"*, get back a structured prompt with a role, context slots, requirements, output format, and guardrails — scored before and after. Works **offline**, with **zero dependencies**.
 
 ## Try it in your browser
 
-**[Live interactive demo →](https://realhassanabbasi.github.io/promptsmith/)** — the full engine (score, enhance, compare, intent classifier) running in the page, plus the whole 28-command loop documented with a real terminal session. No install, no server.
+**[Live interactive demo →](https://realhassanabbasi.github.io/promptsmith/)** — the full engine (score, enhance, compare, intent classifier) running in the page, plus the whole 29-command loop documented with a real terminal session. No install, no server.
 
 ## Why
 
@@ -32,6 +32,7 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 - **`check`** — regression guard for your saved library: re-scores every prompt against its recorded best and flags regressions (rubric upgrades can't silently change what your prompts score); `--fail-on-regression` exits 1 for CI, `--tags a,b` scopes the guard to one tag (so CI can guard just the production prompts), `--json` for dashboards
 - **`audit`** — library health check for the mess `check` never sees: the same prompt saved under two names, keepers whose best version is still weak (below `--weak`, default 50 — the rubric's weak/okay line), names with no tags, and prompts never run through `--improve` — each finding comes with its fix (`--fail` exits 1 for CI, `--json` for dashboards). An empty library gets an honest one-liner, a clean library gets a clean bill of health
 - **`doctor`** — folder-integrity check for the `.promptsmith` data files themselves: `history.jsonl` and `library.jsonl` are hand-editable JSONL, so a killed process or a stray edit can leave a half-written line, a record missing its score, or a random file in the folder — the loaders silently skip bad lines, so the damage is invisible until a trend or a version goes missing. `doctor` reports every bad line by number and names stray files; `--fix` drops the bad lines after writing a `.bak` backup of each repaired file (healthy files are never touched, stray files are never deleted — you decide) (`--fail` exits 1 for CI, `--json` for dashboards). No folder yet gets an honest one-liner, a clean folder gets a clean bill of health
+- **`skill-enhance`** — score and rewrite an agent skill file (SKILL.md) part by part, the way `improve` does for prompts: frontmatter (name + description), instructions (clear steps, no vague filler), examples (a real input → output pair), workflow (ordered steps, a decision point, a stuck rule), file references (paths the skill mentions must exist), and constraints (what the skill must NOT do). Each part scores 0–100 with its fix named; the rewrite only makes mechanical, safe fixes — missing sections become clearly-marked TODO placeholders, vague lines that cannot be fixed safely are listed with line numbers instead of hidden. By default it writes `<file>.enhanced.md` and leaves the original untouched; `--in-place` overwrites only after a `.bak` backup; `--dry-run` previews it, `--fail` exits 1 when the BEFORE score is below 70 (for CI), `--json` for dashboards
 - **`refresh`** — upgrade the whole library at once: re-improves every saved prompt and saves the rebuild as a new version ONLY when it beats the recorded best — a zero or negative margin saves nothing, so the library never fills with rewrites that only look better (`--dry-run` previews the gains, `--tags a,b` scopes it to one tag, `--json` for dashboards). A second refresh right after a successful one reports unchanged: the enhancer is idempotent on its own output, so refresh converges instead of stacking versions
 - **`prune`** — keep the library lean: `prune` keeps only the best N versions of every saved name (`--keep 2` by default, `--keep 1` keeps just the best) and drops score-history records older than 30 days (`--history-days` to change it) — ties go to the latest version, the versions left behind keep their numbers, and a history record with a missing or unparseable timestamp is never deleted (`--dry-run` previews what goes, `--library-only`/`--history-only` scope it, `--json` for scripts). Refresh grows the library; prune is the half that trims it back
 - **`export`** — share your prompt library: `export` prints it as Markdown (one section per prompt, versions with scores and improved text), `--format json` for machine-readable output, `-o FILE` to write to a file, `export NAME` for a single prompt, `--tags a,b` to export only the versions carrying a tag (so a team gets just the coding prompts, not the whole library)
@@ -988,6 +989,45 @@ any repair, so CI can block a damaged folder the same way
 `audit --fail` blocks a messy library. A missing folder gets an
 honest one-liner; a clean folder prints "Folder looks healthy".
 
+## Skill-enhance
+
+Real output — a real skill file (the Roast Room gate skill, 55/100 before)
+scored part by part, then rewritten. The rewrite never invents content:
+the missing frontmatter becomes a marked TODO placeholder, and the broken
+file references the skill mentions (paths from another folder) are only
+flagged, never fixed or hidden:
+
+```
+$ promptsmith skill-enhance weak-skill.md --dry-run
+
+Skill enhance — weak-skill.md
+
+  frontmatter  ░░░░░░░░░░   0/100 → 90
+  instructions ██████████ 100/100
+  examples     ░░░░░░░░░░   0/100 → 75
+  workflow     ██████████ 100/100
+  references   ░░░░░░░░░░   0/100
+  constraints  ██████████ 100/100
+
+Skill score: 55 → 84  (+29) (okay → good)
+
+What changed:
+  • Frontmatter: added --- block (name + description placeholder) — the skill would not load without it.
+  • Examples: added an Example section template — fill in one real input → output pair.
+
+Dry run — nothing written. Re-run without --dry-run to write the enhanced skill.
+```
+
+By default the enhanced skill goes to `weak-skill.enhanced.md` and the
+original is never touched. `--in-place` overwrites the original only after
+writing a `.bak` backup of it, the same safety rule `doctor --fix` uses.
+`--output FILE` picks the destination. `--fail` exits 1 when the BEFORE
+score is below 70, so CI can block a weak skill the same way
+`audit --fail` blocks a messy library. File references are checked
+relative to the skill file's own folder; a skill that references another
+folder's paths will see those flagged — fix the path or move the skill,
+the enhancer never guesses.
+
 ## Agent skill export
 
 Coding agents (Claude Code, Codex, Cursor) can use PromptSmith's rubric
@@ -1132,7 +1172,7 @@ promptsmith/
 ├── promptsmith/
 │   ├── __init__.py        # public API
 │   ├── __main__.py        # `python -m promptsmith`
-│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/compare/diff/report/stats/improve/save/library/rollback/search/tokens/cost/check/audit/doctor/export/init/import/delete/rename/refresh/prune)
+│   ├── cli.py             # argparse CLI (score/enhance/batch/templates/interactive/skill/skill-enhance/compare/diff/report/stats/improve/save/library/rollback/search/tokens/cost/check/audit/doctor/export/init/import/delete/rename/refresh/prune)
 │   ├── audit.py           # `promptsmith audit` — duplicates, weak keepers, untagged and never-improved prompts
 │   ├── doctor.py          # `promptsmith doctor` — folder integrity: corrupt/incomplete lines, stray files, --fix with .bak backup
 │   ├── check.py           # `promptsmith check` — re-score the library, flag regressions
@@ -1156,14 +1196,15 @@ promptsmith/
 │   ├── rename.py          # `promptsmith rename` — rename a saved prompt, every version moves (never merged onto an existing name)
 │   ├── scorer.py          # 5-check rubric, 0-100
 │   ├── skills.py          # `promptsmith skill` — renders an installable agent skill (rubric + improvement loop)
+│   ├── skill_enhance.py   # `promptsmith skill-enhance` — score + rewrite a SKILL.md part by part (frontmatter, instructions, examples, workflow, references, constraints); default writes .enhanced.md, --in-place after .bak backup
 │   ├── stats.py           # `promptsmith stats` — project totals across history + library
 │   ├── templates.py       # 8 ready-made templates
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 309 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete, rename, duplicate-guard, library-tags, check-tags, export-tags, stats-tags, tags, batch-log, showcase, refresh, prune, audit, doctor)
+│   └── test_promptsmith.py  # 342 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete, rename, duplicate-guard, library-tags, check-tags, export-tags, stats-tags, tags, batch-log, showcase, refresh, prune, audit, doctor, skill-enhance)
 ├── docs/
-│   └── index.html         # live interactive showcase (score/enhance/compare in-browser + full 27-command loop)
+│   └── index.html         # live interactive showcase (score/enhance/compare in-browser + full 29-command loop)
 ├── examples/
 │   └── before_after.md    # real before/after pairs
 ├── demo.py                # end-to-end demo, no args needed

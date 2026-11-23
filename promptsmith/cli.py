@@ -27,6 +27,7 @@ from .rename import rename_entry
 from .rollback import rollback_entry
 from .search import search_library
 from .scorer import grade, score_prompt
+from .skill_enhance import enhance_skill_file, skill_enhance_payload
 from .skills import SKILL_NAME, render_skill, write_skill
 from .stats import stats_payload
 from .templates import TEMPLATES, names, placeholders, render
@@ -883,6 +884,62 @@ def cmd_skill(args):
         print(render_skill())
 
 
+def cmd_skill_enhance(args):
+    """Score a skill file part by part, then rewrite the weak parts."""
+    path = args.file or "SKILL.md"
+    try:
+        result = enhance_skill_file(path, output=args.output,
+                                    in_place=args.in_place,
+                                    dry_run=args.dry_run)
+    except (OSError, UnicodeDecodeError) as e:
+        if not args.file:
+            print("No SKILL.md in this folder — pass the file path.",
+                  file=sys.stderr)
+        else:
+            print(f"Error: can't read {path}: {e}", file=sys.stderr)
+        sys.exit(1)
+    if args.json:
+        payload = skill_enhance_payload(result)
+        payload.update({"file": path, "written": result["written"],
+                        "backup": result["backup"],
+                        "dry_run": args.dry_run})
+        print(json.dumps(payload, indent=2))
+    else:
+        print(f"\n{bold('Skill enhance')} — {path}\n")
+        for part in ("frontmatter", "instructions", "examples",
+                     "workflow", "references", "constraints"):
+            before = result["parts_before"][part]
+            after = result["parts_after"][part]
+            bar = "█" * (before // 10) + "░" * (10 - before // 10)
+            move = (f" → {after}" if after != before else "")
+            print(f"  {part:12} {bar} {before:>3}/100{move}")
+        print(f"\n{bold('Skill score:')} {yellow(str(result['before']))} → "
+              f"{green(str(result['after']))}  (+{result['gain']}) "
+              f"({grade(result['before'])} → {grade(result['after'])})\n")
+        if result["changes"]:
+            print(bold("What changed:"))
+            for change in result["changes"]:
+                print(f"  • {change}")
+            print()
+        if result["still_vague"]:
+            print(bold("Still vague — fix by hand:"))
+            for number, line in result["still_vague"]:
+                print(f"  • line {number}: {line}")
+            print()
+        if args.dry_run:
+            print("Dry run — nothing written. Re-run without --dry-run "
+                  "to write the enhanced skill.\n")
+        elif result["written"]:
+            if args.in_place:
+                print(f"Written in place: {result['written']} "
+                      f"(backup at {result['backup']})\n")
+            else:
+                print(f"Written to: {result['written']} "
+                      "(original untouched)\n")
+    if args.fail and result["before"] < 70:
+        sys.exit(1)
+
+
 def cmd_interactive(_args):
     print(bold("\nLet's build your prompt together.\n"))
     goal = input("What do you want the AI to do? ").strip()
@@ -1091,6 +1148,26 @@ def build_parser():
     k.add_argument("--out", metavar="DIR",
                    help="Write DIR/promptsmith/SKILL.md instead of printing")
     k.set_defaults(func=cmd_skill)
+
+    ke = sub.add_parser("skill-enhance", help="Score and rewrite an agent "
+                        "skill file (SKILL.md), part by part")
+    ke.add_argument("file", nargs="?", default=None,
+                    help="Skill file to enhance (default: SKILL.md in "
+                         "this folder)")
+    ke.add_argument("--dry-run", action="store_true",
+                    help="Show the score and planned changes, write nothing")
+    ke.add_argument("--output", metavar="FILE",
+                    help="Write the enhanced skill to FILE instead of "
+                         "<file>.enhanced.md")
+    ke.add_argument("--in-place", action="store_true",
+                    help="Overwrite the original (a .bak backup is "
+                         "written first)")
+    ke.add_argument("--fail", action="store_true",
+                    help="Exit 1 if the BEFORE score is below 70 "
+                         "(useful in CI)")
+    ke.add_argument("--json", action="store_true",
+                    help="Print the result as machine-readable JSON")
+    ke.set_defaults(func=cmd_skill_enhance)
 
     c = sub.add_parser("compare", help="Compare two prompt files head-to-head")
     c.add_argument("file_a", help="File holding prompt A (whole file = one prompt)")

@@ -29,11 +29,12 @@ from .search import search_library
 from .scorer import grade, score_prompt
 from .skill_enhance import enhance_skill, score_skill, skill_enhance_payload
 from .stats import stats_payload
-from .skills import render_skill, write_skill
+from .skills import (check_skill, enhance_own_skill, render_skill,
+                     skill_check_payload, write_skill)
 from .templates import names, placeholders, render, TEMPLATES
 from .tokens import context_share, estimate_tokens, token_report
 
-__version__ = "1.34.0"
+__version__ = "1.35.0"
 __all__ = ["load_default", "predict_intent", "check_library", "check_name", "check_payload", "enhance", "improve_prompt", "what_improved", "score_prompt", "grade", "compare_prompts", "cost_estimate", "cost_report", "known_models", "word_diff", "diff_stats", "render_diff", "diff_payload", "export_json", "export_markdown", "export_payload", "render", "names", "placeholders", "TEMPLATES", "render_skill", "write_skill", "log_score", "load_history", "trend", "sparkline", "verdict", "save_entry", "load_library", "entries_for", "summarize", "filter_by_tags",
     "init_project", "estimate_tokens", "token_report", "context_share",
     "tag_summary", "audit_library", "audit_payload", "find_duplicates",
@@ -43,4 +44,5 @@ __all__ = ["load_default", "predict_intent", "check_library", "check_name", "che
     "search_library", "delete_entry", "rename_entry", "refresh_library",
     "refresh_name", "refresh_payload", "prune_library", "prune_history",
     "prune_payload", "doctor_report", "doctor_fix", "doctor_payload",
-    "score_skill", "enhance_skill", "skill_enhance_payload"]
+    "score_skill", "enhance_skill", "skill_enhance_payload", "check_skill",
+    "enhance_own_skill", "skill_check_payload"]

@@ -28,7 +28,8 @@ from .rollback import rollback_entry
 from .search import search_library
 from .scorer import grade, score_prompt
 from .skill_enhance import enhance_skill_file, skill_enhance_payload
-from .skills import SKILL_NAME, render_skill, write_skill
+from .skills import (SKILL_NAME, check_skill, enhance_own_skill, render_skill,
+                    skill_check_payload, write_skill)
 from .stats import stats_payload
 from .templates import TEMPLATES, names, placeholders, render
 from .tokens import estimate_tokens, token_report
@@ -875,12 +876,55 @@ def cmd_templates(args):
 
 
 def cmd_skill(args):
+    checked = enhanced = None
+    if args.check or args.enhance:
+        checked = check_skill()
+        if args.enhance:
+            enhanced = enhance_own_skill()
+    if args.check:
+        if args.json:
+            payload = skill_check_payload(checked)
+            if enhanced is not None:
+                payload["enhanced"] = enhanced["enhanced"]
+            print(json.dumps(payload, indent=2))
+        else:
+            print(f"\n{bold('Skill self-check')} — the skill this tool "
+                  f"exports, scored on the skill-enhance rubric\n")
+            for part in ("frontmatter", "instructions", "examples",
+                         "workflow", "references", "constraints"):
+                value = checked["parts"][part]
+                bar = "█" * (value // 10) + "░" * (10 - value // 10)
+                print(f"  {part:12} {bar} {value:>3}/100")
+            print(f"\n{bold('Skill score:')} "
+                  f"{green(str(checked['score']))}  "
+                  f"({checked['grade']})\n")
+            if checked["score"] < 100:
+                print(bold("Findings — fix by hand:"))
+                for finding in checked["findings"]:
+                    print(f"  • {finding}")
+                print()
+            else:
+                print("No findings — the exported skill passes every "
+                      "part.\n")
+            if enhanced is not None:
+                print(f"{bold('Enhanced skill')} — {enhanced['before']} → "
+                      f"{enhanced['after']}  (+{enhanced['gain']})\n")
+                if enhanced["changes"]:
+                    print(bold("What changed:"))
+                    for change in enhanced["changes"]:
+                        print(f"  • {change}")
+                    print()
+        if args.fail and checked["score"] < 70:
+            sys.exit(1)
     if args.out:
-        path = write_skill(args.out)
+        path = write_skill(args.out, text=(enhanced["enhanced"]
+                                           if enhanced is not None else None))
         print(f"\n{bold('Skill written to:')} {path}\n")
         print("Install for Claude Code: copy it under ~/.claude/skills/")
         print("It also works with Codex and Cursor's skill folders.\n")
-    else:
+    elif enhanced is not None:
+        print(enhanced["enhanced"])
+    elif not args.check:
         print(render_skill())
 
 
@@ -1147,6 +1191,18 @@ def build_parser():
     k = sub.add_parser("skill", help="Generate an installable agent skill (SKILL.md)")
     k.add_argument("--out", metavar="DIR",
                    help="Write DIR/promptsmith/SKILL.md instead of printing")
+    k.add_argument("--check", action="store_true",
+                   help="Score the exported skill on the skill-enhance "
+                        "rubric instead of printing it")
+    k.add_argument("--enhance", action="store_true",
+                   help="Print (or, with --out, install) the skill-enhance "
+                        "rewrite of the exported skill")
+    k.add_argument("--fail", action="store_true",
+                   help="With --check: exit 1 if the exported skill scores "
+                        "below 70 (useful in CI)")
+    k.add_argument("--json", action="store_true",
+                   help="With --check: print the score report as "
+                        "machine-readable JSON")
     k.set_defaults(func=cmd_skill)
 
     ke = sub.add_parser("skill-enhance", help="Score and rewrite an agent "

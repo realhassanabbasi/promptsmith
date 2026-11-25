@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Deps](https://img.shields.io/badge/dependencies-zero-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-342%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-351%20passing-brightgreen?style=flat-square)
 [![Live demo](https://img.shields.io/badge/demo-live%20in%20browser-black?style=flat-square)](https://realhassanabbasi.github.io/promptsmith/)
 
 **Turn rough prompts into engineered ones.** Paste in *"help me with python"*, get back a structured prompt with a role, context slots, requirements, output format, and guardrails — scored before and after. Works **offline**, with **zero dependencies**.
@@ -44,7 +44,7 @@ Small vague prompts get small vague answers. PromptSmith applies the checklist e
 - **`tokens`** — estimate token count and context-window share for any prompt: `tokens "prompt"` prints ~tokens, words, chars, and % of the model's window used (`--model` to pick the model, `--json` for scripts)
 - **`templates`** — 8 fill-in-the-blank templates (debug code, explain concepts, learn vocabulary, study plans…)
 - **`interactive`** — guided Q&A that builds your prompt with you
-- **`skill`** — generate an installable agent skill (SKILL.md) from the real scoring rubric AND the full score→improve→compare/diff→version loop, so coding agents apply the same workflow themselves
+- **`skill`** — generate an installable agent skill (SKILL.md) from the real scoring rubric AND the full score→improve→compare/diff→version loop, so coding agents apply the same workflow themselves. `skill --check` grades that exported skill on the same 6-part rubric `skill-enhance` uses — it scores 100/100, every part full marks — and `skill --enhance` prints or installs the skill-enhancer's rewrite of it (`--fail` exits 1 in CI when the score is below 70, `--json` for dashboards)
 - **From-scratch ML** — intent classifier (Multinomial Naive Bayes) trained on 94 labeled prompts across 8 intents, pure stdlib; shaky guesses fall back to a generic role instead of a confident wrong one
 - **Zero dependencies** — only the Python standard library; runs anywhere, even offline
 
@@ -1028,6 +1028,41 @@ relative to the skill file's own folder; a skill that references another
 folder's paths will see those flagged — fix the path or move the skill,
 the enhancer never guesses.
 
+## Skill self-check
+
+The tool grades the skill it exports, on the same rubric — dogfooding,
+not a claim. Real output:
+
+```
+$ promptsmith skill --check
+
+Skill self-check — the skill this tool exports, scored on the skill-enhance rubric
+
+  frontmatter  ██████████ 100/100
+  instructions ██████████ 100/100
+  examples     ██████████ 100/100
+  workflow     ██████████ 100/100
+  references   ██████████ 100/100
+  constraints  ██████████ 100/100
+
+Skill score: 100  (excellent)
+
+No findings — the exported skill passes every part.
+```
+
+It was not 100 on the first run of the check: the worked example had no
+explicit input → output pair (examples 65/100), and the workflow text
+named two file paths that do not exist next to an installed skill
+(`.promptsmith/history.jsonl`, `<file>.enhanced.md` — references 50/100).
+Both were fixed in the skill itself — the example now labels its Input
+and Output, and the paths are described as runtime files in the project
+folder instead of named as files — and the check now passes every part.
+`skill --enhance` prints (or, with `--out`, installs) the
+skill-enhancer's rewrite of the exported skill; a skill already at full
+marks comes back unchanged, gain 0. `--fail` exits 1 when the score is
+below 70, so CI can block a regressed skill the same way `audit --fail`
+blocks a messy library, and `--json` prints the report for dashboards.
+
 ## Agent skill export
 
 Coding agents (Claude Code, Codex, Cursor) can use PromptSmith's rubric
@@ -1053,9 +1088,9 @@ Real `promptsmith skill` output (excerpt):
 ```markdown
 ## Worked example (real output)
 
-Rough prompt: "help me write an essay about climate change"
+Input: "help me write an essay about climate change"
 
-Scored 37/100 (weak) → improved 92/100 (excellent), margin +55 points,
+Output: scored 37/100 (weak) → improved 92/100 (excellent), margin +55 points,
 intent `write` (confidence 0.69).
 
 Biggest gains: context +17, format +16, specificity +15.
@@ -1195,14 +1230,14 @@ promptsmith/
 │   ├── delete.py          # `promptsmith delete` — remove a prompt or one version (numbers never renumbered)
 │   ├── rename.py          # `promptsmith rename` — rename a saved prompt, every version moves (never merged onto an existing name)
 │   ├── scorer.py          # 5-check rubric, 0-100
-│   ├── skills.py          # `promptsmith skill` — renders an installable agent skill (rubric + improvement loop)
+│   ├── skills.py          # `promptsmith skill` — renders an installable agent skill (rubric + improvement loop); `--check` grades the export on the skill-enhance rubric, `--enhance` rewrites it
 │   ├── skill_enhance.py   # `promptsmith skill-enhance` — score + rewrite a SKILL.md part by part (frontmatter, instructions, examples, workflow, references, constraints); default writes .enhanced.md, --in-place after .bak backup
 │   ├── stats.py           # `promptsmith stats` — project totals across history + library
 │   ├── templates.py       # 8 ready-made templates
 │   └── data/
 │       └── training_prompts.json  # labeled set (94 prompts, 8 intents)
 ├── tests/
-│   └── test_promptsmith.py  # 342 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete, rename, duplicate-guard, library-tags, check-tags, export-tags, stats-tags, tags, batch-log, showcase, refresh, prune, audit, doctor, skill-enhance)
+│   └── test_promptsmith.py  # 351 unit tests (scorer, classifier, enhancer, CLI, batch, packaging, skill, compare, diff, history, improve, library, tokens, cost, check, export, init, import, stats, rollback, search, delete, rename, duplicate-guard, library-tags, check-tags, export-tags, stats-tags, tags, batch-log, showcase, refresh, prune, audit, doctor, skill-enhance, skill-self-check)
 ├── docs/
 │   └── index.html         # live interactive showcase (score/enhance/compare in-browser + full 29-command loop)
 ├── examples/

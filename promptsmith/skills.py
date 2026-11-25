@@ -3,6 +3,11 @@
 Agent skills (Claude Code, Codex, Cursor) are small SKILL.md instruction
 packs. This module renders one from PromptSmith's REAL scoring, comparison
 and enhancement pipeline — nothing invented, nothing hardcoded twice.
+
+It also grades its own output: `check_skill()` scores the rendered skill
+on the same 6-part rubric `skill-enhance` applies to any SKILL.md, and
+`enhance_own_skill()` runs the skill-enhancer over the render. The skill
+PromptSmith exports should pass the rubric PromptSmith teaches.
 """
 
 import os
@@ -10,6 +15,7 @@ import os
 from . import scorer
 from .enhancer import FORMATS, REQUIREMENTS, ROLES
 from .improve import improve_prompt, what_improved
+from .skill_enhance import enhance_skill, grade as skill_grade, score_skill
 
 SKILL_NAME = "promptsmith"
 
@@ -108,13 +114,15 @@ def _workflow_section():
         "no tags, prompts never run through `--improve`; `--fail` exits 1 "
         "in CI) → "
         "`doctor` (the folder-integrity check — corrupt or half-written "
-        "lines in `.promptsmith/history.jsonl` and `library.jsonl`, stray "
-        "files in the folder; `--fix` drops the bad lines after writing "
+        "lines in the score-history and library files in the project's "
+        ".promptsmith folder, stray files in the folder; `--fix` drops "
+        "the bad lines after writing "
         "a `.bak` backup, `--fail` exits 1 in CI) → "
         "`skill-enhance` (score and rewrite a SKILL.md part by part — "
         "frontmatter, instructions, examples, workflow, file references, "
         "constraints; `--dry-run` previews it, the default writes "
-        "`<file>.enhanced.md` and leaves the original untouched, "
+        "the enhanced skill next to the original and leaves the original "
+        "untouched, "
         "`--in-place` overwrites only after a `.bak` backup; a weak skill "
         "that cannot prove a gain stays as it is) → "
         "`refresh` (re-run the enhancer over every saved prompt — a rebuild "
@@ -137,7 +145,14 @@ def _workflow_section():
         "scores preserved). "
         "Measure the prompt's token load with `tokens` and budget its API "
         "cost with `cost` before shipping. "
-        "The workflow above works without the tool too.\n"
+        "The workflow above works without the tool too.\n\n"
+        "The skill grades itself too: `skill --check` scores this exported "
+        "skill on the same 6-part rubric `skill-enhance` uses (frontmatter, "
+        "instructions, examples, workflow, references, constraints) and "
+        "names every weak part — if this skill ever scores below 70, fix "
+        "the finding before installing it. `--fail` exits 1 in CI when the "
+        "score is below 70, and `--enhance` prints or installs the "
+        "improved version.\n"
     )
 
 
@@ -147,8 +162,8 @@ def _example_section():
     gains = ", ".join(f"{check} +{delta}" for check, delta in top)
     return (
         "## Worked example (real output)\n\n"
-        f'Rough prompt: "{EXAMPLE_ROUGH}"\n\n'
-        f"Scored {result['before']['score']}/100 ({scorer.grade(result['before']['score'])}) → "
+        f'Input: "{EXAMPLE_ROUGH}"\n\n'
+        f"Output: scored {result['before']['score']}/100 ({scorer.grade(result['before']['score'])}) → "
         f"improved {result['after']['score']}/100 ({scorer.grade(result['after']['score'])}), "
         f"margin +{result['margin']} points, intent `{result['intent']}` "
         f"(confidence {result['confidence']}).\n\n"
@@ -189,14 +204,51 @@ def render_skill(name=SKILL_NAME):
     return frontmatter + body
 
 
-def write_skill(directory, name=SKILL_NAME):
+def write_skill(directory, name=SKILL_NAME, text=None):
     """Write <directory>/<name>/SKILL.md (the layout agent CLIs expect).
 
-    Returns the path of the written file.
+    `text` overrides the render — `skill --out DIR --enhance` uses it to
+    install the improved version instead of the raw render. Returns the
+    path of the written file.
     """
     skill_dir = os.path.join(os.path.expanduser(directory), name)
     os.makedirs(skill_dir, exist_ok=True)
     path = os.path.join(skill_dir, "SKILL.md")
     with open(path, "w", encoding="utf-8") as f:
-        f.write(render_skill(name))
+        f.write(render_skill(name) if text is None else text)
     return path
+
+
+def check_skill(name=SKILL_NAME, base_dir=None):
+    """Score the skill this tool exports, on the skill-enhance rubric.
+
+    Returns {"score", "grade", "parts", "findings", "text"} — the same
+    6-part scoring skill-enhance applies to any SKILL.md, run against
+    the render of this tool's own skill. The exported skill should pass
+    its own rubric; when it does not, the findings name the fix.
+    """
+    text = render_skill(name)
+    score, parts, findings = score_skill(text, base_dir)
+    return {"score": score, "grade": skill_grade(score), "parts": parts,
+            "findings": findings, "text": text}
+
+
+def enhance_own_skill(name=SKILL_NAME, base_dir=None):
+    """Run skill-enhance over the skill this tool exports.
+
+    Returns the enhance_skill() result dict (before/after/gain, per-part
+    scores, changes, still-vague lines, enhanced text). A skill that
+    already scores full marks comes back unchanged — gain 0, no changes —
+    which is the result the self-check should show most days.
+    """
+    return enhance_skill(render_skill(name), base_dir, name_hint=name)
+
+
+def skill_check_payload(result):
+    """Machine-readable envelope for the self-check result."""
+    return {
+        "score": result["score"],
+        "grade": result["grade"],
+        "parts": result["parts"],
+        "findings": result["findings"],
+    }

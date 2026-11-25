@@ -307,9 +307,9 @@ class TestSkill(unittest.TestCase):
         md = render_skill()
         self.assertIn("improvement loop", md.split("---")[1])
 
-    def test_version_is_1_34_0(self):
+    def test_version_is_1_35_0(self):
         import promptsmith
-        self.assertEqual(promptsmith.__version__, "1.34.0")
+        self.assertEqual(promptsmith.__version__, "1.35.0")
 
 
 class TestCompare(unittest.TestCase):
@@ -3691,11 +3691,112 @@ class TestSkillEnhance(unittest.TestCase):
             self.assertTrue(callable(getattr(promptsmith, name)))
 
 
+class TestSkillSelfCheck(unittest.TestCase):
+    """v1.35.0: the tool grades the skill it exports, on the same rubric
+    skill-enhance applies to any SKILL.md — and fixes what it finds."""
+
+    def test_exported_skill_scores_100(self):
+        # the dogfood claim: every part full marks, no real findings.
+        # The references part notes "nothing to check" when a skill names
+        # no file paths — that is the only finding, and it is not a flaw.
+        from promptsmith.skills import check_skill
+        result = check_skill()
+        self.assertEqual(result["score"], 100)
+        self.assertEqual(result["grade"], "excellent")
+        self.assertEqual(result["parts"], {
+            "frontmatter": 100, "instructions": 100, "examples": 100,
+            "workflow": 100, "references": 100, "constraints": 100})
+        self.assertEqual(result["findings"],
+                         ["No file references mentioned — nothing to check."])
+        self.assertEqual(result["text"], render_skill())
+
+    def test_example_section_labels_input_output(self):
+        # the v1.34.0 self-check found the worked example had no explicit
+        # input -> output pair (examples 65/100); the labels are the fix
+        md = render_skill()
+        section = md.split("## Worked example")[1]
+        self.assertIn('Input: "help me write an essay about climate change"',
+                      section)
+        self.assertIn("Output: scored", section)
+
+    def test_enhance_own_skill_leaves_perfect_skill_untouched(self):
+        # a skill at 100/100 comes back byte-identical: gain 0, no changes
+        from promptsmith.skills import check_skill, enhance_own_skill
+        result = enhance_own_skill()
+        self.assertEqual(result["before"], check_skill()["score"])
+        self.assertEqual(result["after"], result["before"])
+        self.assertEqual(result["gain"], 0)
+        self.assertEqual(result["changes"], [])
+        self.assertEqual(result["still_vague"], [])
+        self.assertEqual(result["enhanced"], render_skill())
+
+    def test_check_cli_text_report(self):
+        from promptsmith.cli import main
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            main(["skill", "--check"])
+        text = out.getvalue()
+        self.assertIn("Skill self-check", text)
+        for part in ("frontmatter", "instructions", "examples",
+                     "workflow", "references", "constraints"):
+            self.assertIn(part, text)
+        self.assertIn("Skill score:", text)
+        self.assertIn("100", text)
+        self.assertIn("excellent", text)
+        self.assertIn("No findings", text)
+
+    def test_check_cli_json(self):
+        from promptsmith.cli import main
+        from promptsmith.skills import check_skill
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            main(["skill", "--check", "--json"])
+        data = json.loads(out.getvalue())
+        self.assertEqual(data["score"], check_skill()["score"])
+        self.assertEqual(data["grade"], "excellent")
+        self.assertEqual(set(data["parts"]), {
+            "frontmatter", "instructions", "examples",
+            "workflow", "references", "constraints"})
+        self.assertIn("findings", data)
+
+    def test_check_cli_fail_exits_zero_on_passing_skill(self):
+        # --fail only exits 1 below 70; the exported skill is at 100
+        from promptsmith.cli import main
+        with contextlib.redirect_stdout(io.StringIO()):
+            main(["skill", "--check", "--fail"])
+
+    def test_enhance_cli_prints_skill(self):
+        from promptsmith.cli import main
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            main(["skill", "--enhance"])
+        self.assertTrue(out.getvalue().startswith("---\nname: promptsmith"))
+        self.assertIn("## Worked example", out.getvalue())
+
+    def test_enhance_cli_out_writes_enhanced(self):
+        from promptsmith.cli import main
+        from promptsmith.skills import enhance_own_skill
+        with tempfile.TemporaryDirectory() as d:
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                main(["skill", "--out", d, "--enhance"])
+            self.assertIn("Skill written to:", out.getvalue())
+            path = os.path.join(d, "promptsmith", "SKILL.md")
+            with open(path, encoding="utf-8") as f:
+                self.assertEqual(f.read(),
+                                 enhance_own_skill()["enhanced"])
+
+    def test_check_and_enhance_together(self):
+        from promptsmith.cli import main
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            main(["skill", "--check", "--enhance"])
+        text = out.getvalue()
+        self.assertIn("Skill self-check", text)
+        self.assertIn("Enhanced skill", text)
+        self.assertIn("name: promptsmith", text)
+
+
 class TestShowcase(unittest.TestCase):
     """docs/index.html is the public demo page: it must track the real tool —
     current version, current test count, and every CLI command.
 
-    NOTE: the "342 tests passing" figure is a literal, like the README badge.
+    NOTE: the "351 tests passing" figure is a literal, like the README badge.
     Bump it (and the showcase metric + README badge) whenever the suite grows.
     """
 
@@ -3713,7 +3814,7 @@ class TestShowcase(unittest.TestCase):
         import promptsmith
         self.assertIn(promptsmith.__version__, self.page)
         # the metric renders as <strong data-count="N">N</strong> + "tests passing"
-        self.assertIn('<strong data-count="342">342</strong>', self.page)
+        self.assertIn('<strong data-count="351">351</strong>', self.page)
         self.assertIn("tests passing", self.page)
 
     def test_showcase_documents_every_command(self):
